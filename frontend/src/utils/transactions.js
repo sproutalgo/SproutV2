@@ -1,4 +1,3 @@
-
 import algosdk from 'algosdk'
 import { algodClient } from './algorand'
 import arc56 from '../../../contracts/Crowdfund.arc56.json'
@@ -202,44 +201,124 @@ export async function buildAppOptInAsaTxn({ sender, appId, asaId }) {
  * ASA (the app_opt_in_asa inner txn). The fund amount must cover base app MBR plus
  * that 0.1 ALGO. The caller passes fundAmount; 400_000 (0.4 ALGO) is a safe value.
  */
-export async function buildSetupPrepGroup({ sender, appId, asaId, fundAmount = 400_000, needsCreatorOptIn }) {
+/**
+ * Setup PREP group — the first of the two setup prompts. Combines into ONE atomic
+ * group (one wallet signature) ONLY the steps that are still needed:
+ *   [·] Payment: fund the app account by the EXACT min-balance shortfall (skipped
+ *       entirely if the app already holds enough)
+ *   [·] Creator opt-in to the app's local state (skipped if already opted in)
+ *   [·] app_opt_in_asa: opts the APP account into the project ASA (skipped if the
+ *       app already holds the ASA)
+ *
+ * IDEMPOTENT / RETRY-SAFE. Each step is gated on live on-chain state, so if the
+ * second setup prompt fails and the creator retries, this prep group only rebuilds
+ * whatever is genuinely still undone — it will NOT re-send the fund or re-attempt
+ * an opt-in that already happened. If everything is already done, it returns an
+ * EMPTY array and the caller should skip prompt 1 entirely.
+ *
+ * EXACT-SHORTFALL FUNDING. Instead of a flat 0.4 ALGO, this reads the app account's
+ * current balance and computes the min-balance it will require AFTER opting into the
+ * ASA (base app MBR + 0.1 ALGO per asset), then funds only `required - current`
+ * (floored at 0) plus a small buffer for the opt-in transaction fees the app pays.
+ * This never overpays and never strands funds: admin_claim closes the account with
+ * close_remainder_to, which sweeps the entire balance regardless of amount.
+ *
+ * Must be submitted and confirmed BEFORE buildSetupGroup (the app has to hold the
+ * ASA before the setup group's token transfer runs). Leaves the setup group and its
+ * group_size==2 security lock untouched.
+ *
+ * Returns { txns, skipped } — `txns` is the (possibly empty) group; `skipped` is
+ * true when nothing needs doing.
+ *
+ * Fees: fund 1000, creator opt-in 1000, app_opt_in_asa 2000 (covers its inner ASA
+ * opt-in). Flat per-transaction — no cross-transaction pooling assumptions.
+ */
+export async function buildSetupPrepGroup({ sender, appId, asaId }) {
   const sp = await getSp()
-
   const appAddress = algosdk.getApplicationAddress(Number(appId))
 
-  const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-    sender,
-    receiver: appAddress,
-    amount: Number(fundAmount),
-    suggestedParams: { ...sp, flatFee: true, fee: 1000 },
-  })
+  // ── Read live on-chain state for the app account ─────────────────────────────
+  let appAcct = null
+  try {
+    appAcct = await algodClient.accountInformation(appAddress).do()
+  } catch {
+    // Account may not exist yet (never funded) — treat as empty.
+    appAcct = null
+  }
 
-  const txns = [fundTxn]
+  const currentBalance = Number(appAcct?.amount ?? 0)
+  const currentMinBalance = Number(appAcct?.['min-balance'] ?? appAcct?.minBalance ?? 0)
 
+  // Is the app already opted into the ASA? Check its asset holdings.
+  const assets = appAcct?.assets ?? appAcct?.['assets'] ?? []
+  const appHoldsAsa = Array.isArray(assets) &&
+    assets.some(a => Number(a['asset-id'] ?? a.assetId ?? a['asset-index'] ?? -1) === Number(asaId))
+
+  // Is the creator already opted into the app's LOCAL state?
+  let creatorOptedIn = false
+  try {
+    const creatorAcct = await algodClient.accountInformation(sender).do()
+    const localStates = creatorAcct?.['apps-local-state'] ?? creatorAcct?.appsLocalState ?? []
+    creatorOptedIn = Array.isArray(localStates) &&
+      localStates.some(ls => Number(ls.id ?? -1) === Number(appId))
+  } catch {
+    creatorOptedIn = false
+  }
+
+  const needsAsaOptIn      = !appHoldsAsa
+  const needsCreatorOptIn  = !creatorOptedIn
+
+  const txns = []
+
+  // ── Fund: exact shortfall against the min-balance the app will need ──────────
+  // After opting into the ASA the app's min-balance rises by 0.1 ALGO. Compute the
+  // target min-balance and fund only the gap. Add a small buffer (0.01 ALGO) so the
+  // app can pay the inner opt-in transaction fee out of its own balance if needed.
+  const ASA_MBR_INCREMENT = 100_000       // +0.1 ALGO per asset opt-in
+  const FEE_BUFFER        = 10_000        // 0.01 ALGO headroom for app-paid fees
+  const projectedMinBalance = currentMinBalance + (needsAsaOptIn ? ASA_MBR_INCREMENT : 0)
+  const targetBalance = projectedMinBalance + FEE_BUFFER
+  const shortfall = Math.max(0, targetBalance - currentBalance)
+
+  if (shortfall > 0) {
+    txns.push(algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      sender,
+      receiver: appAddress,
+      amount: shortfall,
+      suggestedParams: { ...sp, flatFee: true, fee: 1000 },
+    }))
+  }
+
+  // ── Creator opt-in to the app (only if not already opted in) ─────────────────
   if (needsCreatorOptIn) {
     const mOpt = method('optin')
-    const optInTxn = algosdk.makeApplicationOptInTxnFromObject({
+    txns.push(algosdk.makeApplicationOptInTxnFromObject({
       sender,
       suggestedParams: { ...sp, flatFee: true, fee: 1000 },
       appIndex: Number(appId),
       appArgs: buildAppArgs(mOpt, []),
-    })
-    txns.push(optInTxn)
+    }))
   }
 
-  const mAsa = method('app_opt_in_asa')
-  const appOptInAsaTxn = algosdk.makeApplicationNoOpTxnFromObject({
-    sender,
-    suggestedParams: { ...sp, flatFee: true, fee: 2000 }, // covers inner ASA opt-in
-    appIndex: Number(appId),
-    appArgs: buildAppArgs(mAsa, [BigInt(asaId)]),
-    foreignAssets: [Number(asaId)],
-  })
-  txns.push(appOptInAsaTxn)
+  // ── App opt-in to the ASA (only if the app doesn't already hold it) ──────────
+  if (needsAsaOptIn) {
+    const mAsa = method('app_opt_in_asa')
+    txns.push(algosdk.makeApplicationNoOpTxnFromObject({
+      sender,
+      suggestedParams: { ...sp, flatFee: true, fee: 2000 }, // covers inner ASA opt-in
+      appIndex: Number(appId),
+      appArgs: buildAppArgs(mAsa, [BigInt(asaId)]),
+      foreignAssets: [Number(asaId)],
+    }))
+  }
+
+  if (txns.length === 0) {
+    return { txns: [], skipped: true }
+  }
 
   // One atomic group → one wallet prompt.
   algosdk.assignGroupID(txns)
-  return txns
+  return { txns, skipped: false }
 }
 
 /**

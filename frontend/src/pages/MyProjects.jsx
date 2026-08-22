@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import {
-  algodClient, fetchOnChainBatch, gsFromCache, fetchLocalState,
+  algodClient, fetchOnChainBatch, gsFromCache,
   algoToMicro, signAndSend,
 } from '../utils/algorand'
 import { fetchCreatorProjectsMeta } from '../utils/api'
@@ -216,19 +216,18 @@ export default function MyProjects() {
       // The builder needs decimals only to compute the token pool amount to send.
       const decimals = asaInfo.decimals ?? 0
 
-      // ── Prompt 1: combined prep group ──────────────────────────────────────
-      // Fund + (conditional) creator opt-in + app ASA opt-in, in ONE atomic group
-      // signed once. Must confirm before the setup group (the app has to hold the
-      // ASA before setup's token transfer runs).
-      const existingLocalState = await fetchLocalState(appId, activeAddress)
-      const needsCreatorOptIn = existingLocalState === null
+      // ── Prompt 1: combined prep group (idempotent / retry-safe) ────────────
+      // Funds the exact min-balance shortfall and includes only the opt-ins that
+      // are still needed. On a retry after a prompt-2 failure, already-done steps
+      // are skipped — no re-sending 0.4 ALGO, no double opt-in. If everything is
+      // already in place, prompt 1 is skipped entirely.
       addToast('Step 1/2: Preparing app (fund + opt-ins)…', 'info', 3000)
-      const prepTxns = await buildSetupPrepGroup({
-        sender: activeAddress, appId, asaId,
-        fundAmount: 400_000,
-        needsCreatorOptIn,
-      })
-      await signAndSend(signTransactions, encodeUnsignedTxns(prepTxns))
+      const prep = await buildSetupPrepGroup({ sender: activeAddress, appId, asaId })
+      if (!prep.skipped) {
+        await signAndSend(signTransactions, encodeUnsignedTxns(prep.txns))
+      } else {
+        addToast('Step 1/2: App already prepared — skipping…', 'info', 2000)
+      }
 
       // ── Prompt 2: setup group (unchanged, group_size==2) ───────────────────
       addToast('Step 2/2: Sending setup (token pool)…', 'info', 3000)
