@@ -72,8 +72,10 @@ from algopy import (
 from algopy.arc4 import abimethod
 
 # ── Constants (module-level compile-time constants must be plain ints) ────────
-GRACE_PERIOD_ROUNDS = 5_580_866   # ~6 months at 2.8 s/block
-ROUNDS_PER_DAY = 30_857           # 86400 / 2.8 rounded
+#GRACE_PERIOD_ROUNDS = 5_580_866   # ~6 months at 2.8 s/block
+GRACE_PERIOD_ROUNDS = 10
+#ROUNDS_PER_DAY = 30_857           # 86400 / 2.8 rounded
+ROUNDS_PER_DAY = 10
 MIN_DAYS = 1
 MAX_DAYS = 100
 MAX_GOAL = 100_000_000_000_000    # 100 million ALGO in microAlgos

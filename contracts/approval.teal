@@ -3,16 +3,16 @@
 
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
-    intcblock 0 1 4 8 1000000 10000000 18262276632972455936 5580866
+    intcblock 0 1 4 8 1000000 10000000 18262276632972455936
     bytecblock "asa_id" "funded_round" "cancelled" "goal" "contrib" "tpb" "creator" "admin" "raised" "admin_fee_claimed" "deadline" "admin_claimed" "apb" "dec_factor" "creator_claimed"
-    // crowdfund.py:87
+    // crowdfund.py:89
     // class Crowdfund(ARC4Contract):
     pushbytess 0x24378d3c 0x441b0cfe 0xdc0de7eb // method "delete()void", method "closeout()void", method "optin()void"
     txna ApplicationArgs 0
     match main_delete_route@4 main_closeout_route@5 main_optin_route@6
 
 main_switch_case_next@7:
-    // crowdfund.py:87
+    // crowdfund.py:89
     // class Crowdfund(ARC4Contract):
     txn OnCompletion
     !
@@ -25,7 +25,7 @@ main_switch_case_next@7:
     err
 
 main_create_NoOp@20:
-    // crowdfund.py:87
+    // crowdfund.py:89
     // class Crowdfund(ARC4Contract):
     pushbytes 0x70a219d4 // method "create(address,uint64,uint64,uint64,uint64,pay)void"
     txna ApplicationArgs 0
@@ -33,7 +33,7 @@ main_create_NoOp@20:
     err
 
 main_optin_route@6:
-    // crowdfund.py:559-560
+    // crowdfund.py:561-562
     // # ── on_optin ────────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["OptIn"])
     txn OnCompletion
@@ -45,7 +45,7 @@ main_optin_route@6:
     b optin
 
 main_closeout_route@5:
-    // crowdfund.py:554-555
+    // crowdfund.py:556-557
     // # ── on_closeout ─────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["CloseOut"])
     txn OnCompletion
@@ -57,7 +57,7 @@ main_closeout_route@5:
     b closeout
 
 main_delete_route@4:
-    // crowdfund.py:544-545
+    // crowdfund.py:546-547
     // # ── on_delete ─────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
@@ -71,7 +71,7 @@ main_delete_route@4:
 
 // crowdfund.Crowdfund.create[routing]() -> void:
 create:
-    // crowdfund.py:114-121
+    // crowdfund.py:116-123
     // # ── on_create ─────────────────────────────────────────────────────────────
     // # Args: admin(32 bytes), goal(microAlgos), tokens_per_bundle, days(1-100),
     // #       algo_per_bundle
@@ -122,14 +122,14 @@ create:
     intc_1 // pay
     ==
     assert // transaction type is pay
-    // crowdfund.py:131
+    // crowdfund.py:133
     // listing_fee = (goal * days) // UInt64(100_000)
     dig 4
     dig 3
     *
     pushint 100000
     /
-    // crowdfund.py:133
+    // crowdfund.py:135
     // UInt64(MIN_LISTING_FEE) if listing_fee < MIN_LISTING_FEE else listing_fee
     dup
     intc 5 // 10000000
@@ -137,53 +137,53 @@ create:
     intc 5 // 10000000
     swap
     select
-    // crowdfund.py:135
+    // crowdfund.py:137
     // deadline_rounds = Global.round + (days * ROUNDS_PER_DAY)
     global Round
     dig 4
-    pushint 30857
+    pushint 10
     *
     +
-    // crowdfund.py:138
+    // crowdfund.py:140
     // assert goal > 0
     dig 6
     assert
-    // crowdfund.py:139
+    // crowdfund.py:141
     // assert goal % UInt64(1_000_000) == 0
     dig 6
     intc 4 // 1000000
     %
     !
     assert
-    // crowdfund.py:140
+    // crowdfund.py:142
     // assert goal >= UInt64(10_000_000)
     dig 6
     intc 5 // 10000000
     >=
     assert
-    // crowdfund.py:141
+    // crowdfund.py:143
     // assert goal <= MAX_GOAL
     dig 6
     pushint 100000000000000
     <=
     assert
-    // crowdfund.py:142-144
+    // crowdfund.py:144-146
     // # tpb == 0 is allowed (donation); > 0 for token campaigns.
     // # apb must always be > 0 — it is a divisor at payout time.
     // assert algo_per_bundle > 0
     dig 3
     assert
-    // crowdfund.py:145
+    // crowdfund.py:147
     // assert days >= MIN_DAYS
     dig 4
     assert
-    // crowdfund.py:146
+    // crowdfund.py:148
     // assert days <= MAX_DAYS
     dig 4
     pushint 100
     <=
     assert
-    // crowdfund.py:147-151
+    // crowdfund.py:149-153
     // # Listing fee payment: grouped Payment from creator to admin.
     // # Under ARC-4 the transaction arg (fee_pay) is placed immediately BEFORE
     // # this app call in the group, so the app call is at index 1 and fee_pay at
@@ -193,7 +193,7 @@ create:
     pushint 2
     ==
     assert
-    // crowdfund.py:152
+    // crowdfund.py:154
     // assert fee_pay.group_index == Txn.group_index - 1
     dig 2
     gtxns GroupIndex
@@ -202,117 +202,117 @@ create:
     -
     ==
     assert
-    // crowdfund.py:153
+    // crowdfund.py:155
     // assert fee_pay.sender == Txn.sender
     dig 2
     gtxns Sender
     txn Sender
     ==
     assert
-    // crowdfund.py:154
+    // crowdfund.py:156
     // assert fee_pay.receiver == admin
     dig 2
     gtxns Receiver
     dig 8
     ==
     assert
-    // crowdfund.py:155
+    // crowdfund.py:157
     // assert fee_pay.amount >= effective_listing_fee
     dig 2
     gtxns Amount
     uncover 2
     >=
     assert
-    // crowdfund.py:156
+    // crowdfund.py:158
     // assert fee_pay.close_remainder_to == Global.zero_address
     dig 1
     gtxns CloseRemainderTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:157
+    // crowdfund.py:159
     // assert fee_pay.rekey_to == Global.zero_address
     swap
     gtxns RekeyTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:159
+    // crowdfund.py:161
     // self.creator.value = Txn.sender
     bytec 6 // "creator"
     txn Sender
     app_global_put
-    // crowdfund.py:160
+    // crowdfund.py:162
     // self.admin.value = admin
     bytec 7 // "admin"
     uncover 6
     app_global_put
-    // crowdfund.py:161
+    // crowdfund.py:163
     // self.goal.value = goal
     bytec_3 // "goal"
     uncover 5
     app_global_put
-    // crowdfund.py:162
+    // crowdfund.py:164
     // self.tpb.value = tokens_per_bundle
     bytec 5 // "tpb"
     uncover 4
     app_global_put
-    // crowdfund.py:163
+    // crowdfund.py:165
     // self.apb.value = algo_per_bundle
     bytec 12 // "apb"
     uncover 2
     app_global_put
-    // crowdfund.py:164
+    // crowdfund.py:166
     // self.days.value = days
     pushbytes "days"
     uncover 2
     app_global_put
-    // crowdfund.py:165
+    // crowdfund.py:167
     // self.deadline.value = deadline_rounds
     bytec 10 // "deadline"
     swap
     app_global_put
-    // crowdfund.py:166
+    // crowdfund.py:168
     // self.raised.value = UInt64(0)
     bytec 8 // "raised"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:167
+    // crowdfund.py:169
     // self.asa_id.value = UInt64(0)
     bytec_0 // "asa_id"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:168
+    // crowdfund.py:170
     // self.dec_factor.value = UInt64(0)
     bytec 13 // "dec_factor"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:169
+    // crowdfund.py:171
     // self.funded_round.value = UInt64(0)
     bytec_1 // "funded_round"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:170
+    // crowdfund.py:172
     // self.cancelled.value = UInt64(0)
     bytec_2 // "cancelled"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:171
+    // crowdfund.py:173
     // self.creator_claimed.value = UInt64(0)
     bytec 14 // "creator_claimed"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:172
+    // crowdfund.py:174
     // self.admin_fee_claimed.value = UInt64(0)
     bytec 9 // "admin_fee_claimed"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:173
+    // crowdfund.py:175
     // self.admin_claimed.value = UInt64(0)
     bytec 11 // "admin_claimed"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:114-121
+    // crowdfund.py:116-123
     // # ── on_create ─────────────────────────────────────────────────────────────
     // # Args: admin(32 bytes), goal(microAlgos), tokens_per_bundle, days(1-100),
     // #       algo_per_bundle
@@ -327,7 +327,7 @@ create:
 
 // crowdfund.Crowdfund.setup[routing]() -> void:
 setup:
-    // crowdfund.py:226-230
+    // crowdfund.py:228-232
     // # ── setup ─────────────────────────────────────────────────────────────────
     // # ARC-4 group: [0] AssetTransfer(tokens from creator to app), [1] AppCall("setup").
     // # The token transfer is passed as the method's transaction argument, so ARC-4
@@ -351,15 +351,15 @@ setup:
     intc_2 // axfer
     ==
     assert // transaction type is axfer
-    // crowdfund.py:232
+    // crowdfund.py:234
     // app_addr = Global.current_application_address
     global CurrentApplicationAddress
     cover 2
-    // crowdfund.py:233
+    // crowdfund.py:235
     // assert self._is_creator()
     callsub _is_creator
     assert
-    // crowdfund.py:234
+    // crowdfund.py:236
     // assert self.asa_id.value == 0  # one-time only
     intc_0 // 0
     bytec_0 // "asa_id"
@@ -367,7 +367,7 @@ setup:
     assert // check self.asa_id exists
     !
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -375,15 +375,15 @@ setup:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:235
+    // crowdfund.py:237
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:236
+    // crowdfund.py:238
     // assert self._before_deadline()  # cannot set up after the campaign ends
     callsub _before_deadline
     assert
-    // crowdfund.py:237
+    // crowdfund.py:239
     // assert self.raised.value == 0  # cannot set up after contributions begin
     intc_0 // 0
     bytec 8 // "raised"
@@ -391,24 +391,24 @@ setup:
     assert // check self.raised exists
     !
     assert
-    // crowdfund.py:238
+    // crowdfund.py:240
     // assert Txn.num_assets == 1
     txn NumAssets
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:239
+    // crowdfund.py:241
     // self.asa_id.value = asset.id
     bytec_0 // "asa_id"
     dig 2
     app_global_put
-    // crowdfund.py:240
+    // crowdfund.py:242
     // assert Global.group_size == 2
     global GroupSize
     pushint 2
     ==
     assert
-    // crowdfund.py:241
+    // crowdfund.py:243
     // assert token_pay.group_index == Txn.group_index - 1
     gtxns GroupIndex
     txn GroupIndex
@@ -416,16 +416,16 @@ setup:
     -
     ==
     assert
-    // crowdfund.py:242-244
+    // crowdfund.py:244-246
     // # Read the ASA decimals on-chain (no trust in caller-supplied value) and
     // # store dec_factor = 10^decimals for use at finalize.
     // decimals, dec_ok = op.AssetParamsGet.asset_decimals(asset)
     dup
     asset_params_get AssetDecimals
-    // crowdfund.py:245
+    // crowdfund.py:247
     // assert dec_ok
     assert
-    // crowdfund.py:246-252
+    // crowdfund.py:248-254
     // # Reject rug-capable tokens: clawback and freeze must be permanently
     // # disabled (a zero clawback/freeze address is immutable on Algorand), and
     // # the asset must not be default-frozen. Without these a creator could claw
@@ -435,50 +435,50 @@ setup:
     // clawback, claw_ok = op.AssetParamsGet.asset_clawback(asset)
     dig 1
     asset_params_get AssetClawback
-    // crowdfund.py:253
+    // crowdfund.py:255
     // assert claw_ok
     assert
-    // crowdfund.py:254
+    // crowdfund.py:256
     // assert clawback == Global.zero_address
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:255
+    // crowdfund.py:257
     // freeze, freeze_ok = op.AssetParamsGet.asset_freeze(asset)
     dig 1
     asset_params_get AssetFreeze
-    // crowdfund.py:256
+    // crowdfund.py:258
     // assert freeze_ok
     assert
-    // crowdfund.py:257
+    // crowdfund.py:259
     // assert freeze == Global.zero_address
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:258
+    // crowdfund.py:260
     // dfrozen, dfrozen_ok = op.AssetParamsGet.asset_default_frozen(asset)
     swap
     asset_params_get AssetDefaultFrozen
-    // crowdfund.py:259
+    // crowdfund.py:261
     // assert dfrozen_ok
     assert
-    // crowdfund.py:260
+    // crowdfund.py:262
     // assert not dfrozen
     !
     assert
-    // crowdfund.py:262
+    // crowdfund.py:264
     // df = op.exp(UInt64(10), decimals)  # 10^decimals
     pushint 10
     swap
     exp
     dup
     cover 4
-    // crowdfund.py:263
+    // crowdfund.py:265
     // self.dec_factor.value = df
     bytec 13 // "dec_factor"
     swap
     app_global_put
-    // crowdfund.py:264-268
+    // crowdfund.py:266-270
     // # Overflow guard (token campaigns only): prove no finalize intermediate can
     // # exceed uint64 at the worst case of one backer contributing the whole goal.
     // #   numer_max = goal * tpb ; whole_cap = numer_max / (apb * 1e6) ;
@@ -486,14 +486,14 @@ setup:
     // pool_needed = UInt64(0)
     intc_0 // 0
     cover 3
-    // crowdfund.py:269
+    // crowdfund.py:271
     // if self.tpb.value != 0:
     intc_0 // 0
     bytec 5 // "tpb"
     app_global_get_ex
     assert // check self.tpb exists
     bz setup_after_if_else@3
-    // crowdfund.py:270
+    // crowdfund.py:272
     // assert self.goal.value * self.tpb.value <= SAFE_CEIL
     intc_0 // 0
     bytec_3 // "goal"
@@ -508,7 +508,7 @@ setup:
     intc 6 // 18262276632972455936
     <=
     assert
-    // crowdfund.py:272
+    // crowdfund.py:274
     // self.apb.value * UInt64(1_000_000)
     intc_0 // 0
     bytec 12 // "apb"
@@ -516,25 +516,25 @@ setup:
     assert // check self.apb exists
     intc 4 // 1000000
     *
-    // crowdfund.py:271-273
+    // crowdfund.py:273-275
     // whole_cap = (self.goal.value * self.tpb.value) // (
     //     self.apb.value * UInt64(1_000_000)
     // )
     /
-    // crowdfund.py:274
+    // crowdfund.py:276
     // pool_needed = whole_cap * df
     dig 5
     *
     dup
     bury 5
-    // crowdfund.py:275
+    // crowdfund.py:277
     // assert pool_needed <= SAFE_CEIL
     intc 6 // 18262276632972455936
     <=
     assert
 
 setup_after_if_else@3:
-    // crowdfund.py:277-283
+    // crowdfund.py:279-285
     // # Inner opt-in to ASA (fee paid by caller via pooling)
     // itxn.AssetTransfer(
     //     xfer_asset=asset,
@@ -543,7 +543,7 @@ setup_after_if_else@3:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:281
+    // crowdfund.py:283
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -553,16 +553,16 @@ setup_after_if_else@3:
     dup
     cover 2
     itxn_field XferAsset
-    // crowdfund.py:277-278
+    // crowdfund.py:279-280
     // # Inner opt-in to ASA (fee paid by caller via pooling)
     // itxn.AssetTransfer(
     intc_2 // axfer
     itxn_field TypeEnum
-    // crowdfund.py:282
+    // crowdfund.py:284
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:277-283
+    // crowdfund.py:279-285
     // # Inner opt-in to ASA (fee paid by caller via pooling)
     // itxn.AssetTransfer(
     //     xfer_asset=asset,
@@ -571,7 +571,7 @@ setup_after_if_else@3:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:285-287
+    // crowdfund.py:287-289
     // # Validate ASA token pool transfer covers the whole-token distribution at
     // # full goal (floor-to-whole-tokens, scaled to base units).
     // assert token_pay.sender == Txn.sender
@@ -581,41 +581,41 @@ setup_after_if_else@3:
     txn Sender
     ==
     assert
-    // crowdfund.py:288
+    // crowdfund.py:290
     // assert token_pay.asset_receiver == app_addr
     dup
     gtxns AssetReceiver
     uncover 2
     ==
     assert
-    // crowdfund.py:289
+    // crowdfund.py:291
     // assert token_pay.xfer_asset == asset
     dup
     gtxns XferAsset
     uncover 2
     ==
     assert
-    // crowdfund.py:290
+    // crowdfund.py:292
     // assert token_pay.asset_amount >= pool_needed
     dup
     gtxns AssetAmount
     dig 2
     >=
     assert
-    // crowdfund.py:291
+    // crowdfund.py:293
     // assert token_pay.asset_close_to == Global.zero_address
     dup
     gtxns AssetCloseTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:292
+    // crowdfund.py:294
     // assert token_pay.rekey_to == Global.zero_address
     gtxns RekeyTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:226-230
+    // crowdfund.py:228-232
     // # ── setup ─────────────────────────────────────────────────────────────────
     // # ARC-4 group: [0] AssetTransfer(tokens from creator to app), [1] AppCall("setup").
     // # The token transfer is passed as the method's transaction argument, so ARC-4
@@ -627,7 +627,7 @@ setup_after_if_else@3:
 
 // crowdfund.Crowdfund.contribute[routing]() -> void:
 contribute:
-    // crowdfund.py:294-298
+    // crowdfund.py:296-300
     // # ── contribute ──────────────────────────────────────────────────────────
     // # raised moves UP by the contribution and is never decremented. Per-investor
     // # `contrib` local state records the individual stake (settled to zero on
@@ -641,17 +641,17 @@ contribute:
     intc_1 // pay
     ==
     assert // transaction type is pay
-    // crowdfund.py:300
+    // crowdfund.py:302
     // investor = Txn.sender
     txn Sender
-    // crowdfund.py:301
+    // crowdfund.py:303
     // app_addr = Global.current_application_address
     global CurrentApplicationAddress
-    // crowdfund.py:302
+    // crowdfund.py:304
     // assert self._before_deadline()
     callsub _before_deadline
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -659,11 +659,11 @@ contribute:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:303
+    // crowdfund.py:305
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:304
+    // crowdfund.py:306
     // assert self.raised.value < self.goal.value
     intc_0 // 0
     bytec 8 // "raised"
@@ -675,7 +675,7 @@ contribute:
     assert // check self.goal exists
     <
     assert
-    // crowdfund.py:305-306
+    // crowdfund.py:307-308
     // # Token campaigns require setup (asa_id != 0); donation campaigns skip it.
     // if self.tpb.value != 0:
     intc_0 // 0
@@ -683,7 +683,7 @@ contribute:
     app_global_get_ex
     assert // check self.tpb exists
     bz contribute_after_if_else@3
-    // crowdfund.py:307
+    // crowdfund.py:309
     // assert self.asa_id.value != 0
     intc_0 // 0
     bytec_0 // "asa_id"
@@ -692,13 +692,13 @@ contribute:
     assert
 
 contribute_after_if_else@3:
-    // crowdfund.py:308
+    // crowdfund.py:310
     // assert Global.group_size == 2
     global GroupSize
     pushint 2
     ==
     assert
-    // crowdfund.py:309
+    // crowdfund.py:311
     // assert pay.group_index == Txn.group_index - 1
     uncover 2
     dup
@@ -708,7 +708,7 @@ contribute_after_if_else@3:
     -
     ==
     assert
-    // crowdfund.py:310
+    // crowdfund.py:312
     // assert pay.sender == investor
     dup
     gtxns Sender
@@ -717,41 +717,41 @@ contribute_after_if_else@3:
     cover 3
     ==
     assert
-    // crowdfund.py:311
+    // crowdfund.py:313
     // assert pay.receiver == app_addr
     dup
     gtxns Receiver
     uncover 3
     ==
     assert
-    // crowdfund.py:312
+    // crowdfund.py:314
     // assert pay.amount > 0
     dup
     gtxns Amount
     dup
     assert
-    // crowdfund.py:313
+    // crowdfund.py:315
     // assert pay.amount % UInt64(1_000_000) == 0
     dup
     intc 4 // 1000000
     %
     !
     assert
-    // crowdfund.py:314
+    // crowdfund.py:316
     // assert pay.close_remainder_to == Global.zero_address
     dig 1
     gtxns CloseRemainderTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:315
+    // crowdfund.py:317
     // assert pay.rekey_to == Global.zero_address
     swap
     gtxns RekeyTo
     global ZeroAddress
     ==
     assert
-    // crowdfund.py:316
+    // crowdfund.py:318
     // assert self.raised.value + pay.amount <= self.goal.value
     intc_0 // 0
     bytec 8 // "raised"
@@ -766,7 +766,7 @@ contribute_after_if_else@3:
     dig 1
     >=
     assert
-    // crowdfund.py:317
+    // crowdfund.py:319
     // self.contrib[investor] = self.contrib.get(investor, default=UInt64(0)) + pay.amount
     dig 2
     intc_0 // 0
@@ -781,12 +781,12 @@ contribute_after_if_else@3:
     bytec 4 // "contrib"
     uncover 2
     app_local_put
-    // crowdfund.py:319
+    // crowdfund.py:321
     // self.raised.value = new_raised
     bytec 8 // "raised"
     dig 1
     app_global_put
-    // crowdfund.py:320
+    // crowdfund.py:322
     // if new_raised >= self.goal.value and self.funded_round.value == 0:
     intc_0 // 0
     bytec_3 // "goal"
@@ -799,14 +799,14 @@ contribute_after_if_else@3:
     app_global_get_ex
     assert // check self.funded_round exists
     bnz contribute_after_if_else@6
-    // crowdfund.py:321
+    // crowdfund.py:323
     // self.funded_round.value = Global.round
     bytec_1 // "funded_round"
     global Round
     app_global_put
 
 contribute_after_if_else@6:
-    // crowdfund.py:294-298
+    // crowdfund.py:296-300
     // # ── contribute ──────────────────────────────────────────────────────────
     // # raised moves UP by the contribution and is never decremented. Per-investor
     // # `contrib` local state records the individual stake (settled to zero on
@@ -819,26 +819,26 @@ contribute_after_if_else@6:
 // crowdfund.Crowdfund.finalize[routing]() -> void:
 finalize:
     pushbytes ""
-    // crowdfund.py:328
+    // crowdfund.py:330
     // investor = Txn.sender
     txn Sender
     dup
-    // crowdfund.py:329
+    // crowdfund.py:331
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:218
+    // crowdfund.py:220
     // return self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:330
+    // crowdfund.py:332
     // assert self._succeeded()
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -846,11 +846,11 @@ finalize:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:331
+    // crowdfund.py:333
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:332
+    // crowdfund.py:334
     // contrib_amt = self.contrib.get(investor, default=UInt64(0))
     intc_0 // 0
     bytec 4 // "contrib"
@@ -860,10 +860,10 @@ finalize:
     select
     dup
     cover 2
-    // crowdfund.py:333
+    // crowdfund.py:335
     // assert contrib_amt > 0
     assert
-    // crowdfund.py:334-341
+    // crowdfund.py:336-343
     // # Token campaigns: floor to WHOLE tokens first, then scale to base units.
     // #   whole_tokens = floor( contrib * tpb / (apb * 1e6) )
     // #   tokens_due   = whole_tokens * dec_factor
@@ -882,7 +882,7 @@ finalize:
     app_global_get_ex
     assert // check self.asa_id exists
     bz finalize_after_if_else@7
-    // crowdfund.py:342
+    // crowdfund.py:344
     // whole_tokens = (contrib_amt * self.tpb.value) // (
     intc_0 // 0
     bytec 5 // "tpb"
@@ -890,7 +890,7 @@ finalize:
     assert // check self.tpb exists
     dig 2
     *
-    // crowdfund.py:343
+    // crowdfund.py:345
     // self.apb.value * UInt64(1_000_000)
     intc_0 // 0
     bytec 12 // "apb"
@@ -898,12 +898,12 @@ finalize:
     assert // check self.apb exists
     intc 4 // 1000000
     *
-    // crowdfund.py:342-344
+    // crowdfund.py:344-346
     // whole_tokens = (contrib_amt * self.tpb.value) // (
     //     self.apb.value * UInt64(1_000_000)
     // )
     /
-    // crowdfund.py:345
+    // crowdfund.py:347
     // tokens_due = whole_tokens * self.dec_factor.value
     intc_0 // 0
     bytec 13 // "dec_factor"
@@ -912,10 +912,10 @@ finalize:
     *
     dup
     bury 4
-    // crowdfund.py:346
+    // crowdfund.py:348
     // if tokens_due > 0:
     bz finalize_after_if_else@7
-    // crowdfund.py:347-352
+    // crowdfund.py:349-354
     // itxn.AssetTransfer(
     //     xfer_asset=self.asa_id.value,
     //     asset_receiver=investor,
@@ -923,7 +923,7 @@ finalize:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:348
+    // crowdfund.py:350
     // xfer_asset=self.asa_id.value,
     intc_0 // 0
     bytec_0 // "asa_id"
@@ -934,15 +934,15 @@ finalize:
     dig 1
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // crowdfund.py:347
+    // crowdfund.py:349
     // itxn.AssetTransfer(
     intc_2 // axfer
     itxn_field TypeEnum
-    // crowdfund.py:351
+    // crowdfund.py:353
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:347-352
+    // crowdfund.py:349-354
     // itxn.AssetTransfer(
     //     xfer_asset=self.asa_id.value,
     //     asset_receiver=investor,
@@ -952,12 +952,12 @@ finalize:
     itxn_submit
 
 finalize_after_if_else@7:
-    // crowdfund.py:353
+    // crowdfund.py:355
     // self.contrib[investor] = UInt64(0)
     bytec 4 // "contrib"
     intc_0 // 0
     app_local_put
-    // crowdfund.py:323-326
+    // crowdfund.py:325-328
     // # ── finalize ──────────────────────────────────────────────────────────────
     // # Success only. Investor claims tokens; their local contrib is zeroed.
     // # Donation campaigns (tpb==0): no tokens distributed, contrib zeroed at once.
@@ -968,26 +968,26 @@ finalize_after_if_else@7:
 
 // crowdfund.Crowdfund.creator_claim[routing]() -> void:
 creator_claim:
-    // crowdfund.py:360
+    // crowdfund.py:362
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:361
+    // crowdfund.py:363
     // assert self._is_creator()
     callsub _is_creator
     assert
-    // crowdfund.py:218
+    // crowdfund.py:220
     // return self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:362
+    // crowdfund.py:364
     // assert self._succeeded()
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -995,11 +995,11 @@ creator_claim:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:363
+    // crowdfund.py:365
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:364
+    // crowdfund.py:366
     // assert self.creator_claimed.value == 0
     intc_0 // 0
     bytec 14 // "creator_claimed"
@@ -1007,7 +1007,7 @@ creator_claim:
     assert // check self.creator_claimed exists
     !
     assert
-    // crowdfund.py:365
+    // crowdfund.py:367
     // admin_fee = (self.goal.value * SUCCESS_FEE_PCT) // UInt64(100)
     intc_0 // 0
     bytec_3 // "goal"
@@ -1018,21 +1018,21 @@ creator_claim:
     *
     pushint 100
     /
-    // crowdfund.py:366
+    // crowdfund.py:368
     // creator_payout = self.goal.value - admin_fee
     -
-    // crowdfund.py:367
+    // crowdfund.py:369
     // assert creator_payout > 0
     dup
     assert
-    // crowdfund.py:368-372
+    // crowdfund.py:370-374
     // itxn.Payment(
     //     receiver=self.creator.value,
     //     amount=creator_payout,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:369
+    // crowdfund.py:371
     // receiver=self.creator.value,
     intc_0 // 0
     bytec 6 // "creator"
@@ -1040,27 +1040,27 @@ creator_claim:
     assert // check self.creator exists
     itxn_field Receiver
     itxn_field Amount
-    // crowdfund.py:368
+    // crowdfund.py:370
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // crowdfund.py:371
+    // crowdfund.py:373
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:368-372
+    // crowdfund.py:370-374
     // itxn.Payment(
     //     receiver=self.creator.value,
     //     amount=creator_payout,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:373
+    // crowdfund.py:375
     // self.creator_claimed.value = UInt64(1)
     bytec 14 // "creator_claimed"
     intc_1 // 1
     app_global_put
-    // crowdfund.py:355-358
+    // crowdfund.py:357-360
     // # ── creator_claim ──────────────────────────────────────────────────────────
     // # Success only. Creator withdraws (goal - 4% fee) ALGO. Callable as soon as
     // # the goal is met, independent of investor finalization.
@@ -1071,26 +1071,26 @@ creator_claim:
 
 // crowdfund.Crowdfund.admin_fee_claim[routing]() -> void:
 admin_fee_claim:
-    // crowdfund.py:383
+    // crowdfund.py:385
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:384
+    // crowdfund.py:386
     // assert self._is_admin()
     callsub _is_admin
     assert
-    // crowdfund.py:218
+    // crowdfund.py:220
     // return self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:385
+    // crowdfund.py:387
     // assert self._succeeded()
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1098,11 +1098,11 @@ admin_fee_claim:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:386
+    // crowdfund.py:388
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:387
+    // crowdfund.py:389
     // assert self.admin_fee_claimed.value == 0
     intc_0 // 0
     bytec 9 // "admin_fee_claimed"
@@ -1110,7 +1110,7 @@ admin_fee_claim:
     assert // check self.admin_fee_claimed exists
     !
     assert
-    // crowdfund.py:388
+    // crowdfund.py:390
     // admin_fee = (self.goal.value * SUCCESS_FEE_PCT) // UInt64(100)
     intc_0 // 0
     bytec_3 // "goal"
@@ -1120,18 +1120,18 @@ admin_fee_claim:
     *
     pushint 100
     /
-    // crowdfund.py:389
+    // crowdfund.py:391
     // assert admin_fee > 0
     dup
     assert
-    // crowdfund.py:390-394
+    // crowdfund.py:392-396
     // itxn.Payment(
     //     receiver=self.admin.value,
     //     amount=admin_fee,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:391
+    // crowdfund.py:393
     // receiver=self.admin.value,
     intc_0 // 0
     bytec 7 // "admin"
@@ -1139,27 +1139,27 @@ admin_fee_claim:
     assert // check self.admin exists
     itxn_field Receiver
     itxn_field Amount
-    // crowdfund.py:390
+    // crowdfund.py:392
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // crowdfund.py:393
+    // crowdfund.py:395
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:390-394
+    // crowdfund.py:392-396
     // itxn.Payment(
     //     receiver=self.admin.value,
     //     amount=admin_fee,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:395
+    // crowdfund.py:397
     // self.admin_fee_claimed.value = UInt64(1)
     bytec 9 // "admin_fee_claimed"
     intc_1 // 1
     app_global_put
-    // crowdfund.py:375-381
+    // crowdfund.py:377-383
     // # ── admin_fee_claim ─────────────────────────────────────────────────────────
     // # Success only. Admin collects the 4% success fee IMMEDIATELY once the goal is
     // # met — no 6-month grace wait. Fully independent of creator_claim: the admin's
@@ -1173,20 +1173,20 @@ admin_fee_claim:
 
 // crowdfund.Crowdfund.refund[routing]() -> void:
 refund:
-    // crowdfund.py:403
+    // crowdfund.py:405
     // investor = Txn.sender
     txn Sender
-    // crowdfund.py:404
+    // crowdfund.py:406
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:405
+    // crowdfund.py:407
     // assert self._failed()
     callsub _failed
     assert
-    // crowdfund.py:406
+    // crowdfund.py:408
     // contrib_amt = self.contrib.get(investor, default=UInt64(0))
     dup
     intc_0 // 0
@@ -1195,11 +1195,11 @@ refund:
     intc_0 // 0
     cover 2
     select
-    // crowdfund.py:407
+    // crowdfund.py:409
     // assert contrib_amt > 0
     dup
     assert
-    // crowdfund.py:408-412
+    // crowdfund.py:410-414
     // itxn.Payment(
     //     receiver=investor,
     //     amount=contrib_amt,
@@ -1209,27 +1209,27 @@ refund:
     itxn_field Amount
     dup
     itxn_field Receiver
-    // crowdfund.py:408
+    // crowdfund.py:410
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // crowdfund.py:411
+    // crowdfund.py:413
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:408-412
+    // crowdfund.py:410-414
     // itxn.Payment(
     //     receiver=investor,
     //     amount=contrib_amt,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:413
+    // crowdfund.py:415
     // self.contrib[investor] = UInt64(0)
     bytec 4 // "contrib"
     intc_0 // 0
     app_local_put
-    // crowdfund.py:397-401
+    // crowdfund.py:399-403
     // # ── refund ──────────────────────────────────────────────────────────────────
     // # Failure only. Investor reclaims their ALGO. Keyed on `failed`, which
     // # requires funded_round == 0 — can NEVER open once the goal is hit.
@@ -1241,21 +1241,21 @@ refund:
 
 // crowdfund.Crowdfund.creator_reclaim_asa[routing]() -> void:
 creator_reclaim_asa:
-    // crowdfund.py:423
+    // crowdfund.py:425
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:424
+    // crowdfund.py:426
     // assert self._is_creator()
     callsub _is_creator
     assert
-    // crowdfund.py:425
+    // crowdfund.py:427
     // assert self._failed()
     callsub _failed
     assert
-    // crowdfund.py:426
+    // crowdfund.py:428
     // assert self.asa_id.value != 0
     intc_0 // 0
     bytec_0 // "asa_id"
@@ -1263,7 +1263,7 @@ creator_reclaim_asa:
     assert // check self.asa_id exists
     dup
     assert
-    // crowdfund.py:427-433
+    // crowdfund.py:429-435
     // itxn.AssetTransfer(
     //     xfer_asset=self.asa_id.value,
     //     asset_receiver=self.creator.value,
@@ -1272,7 +1272,7 @@ creator_reclaim_asa:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:429
+    // crowdfund.py:431
     // asset_receiver=self.creator.value,
     intc_0 // 0
     bytec 6 // "creator"
@@ -1280,21 +1280,21 @@ creator_reclaim_asa:
     assert // check self.creator exists
     dup
     itxn_field AssetCloseTo
-    // crowdfund.py:430
+    // crowdfund.py:432
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // crowdfund.py:427
+    // crowdfund.py:429
     // itxn.AssetTransfer(
     intc_2 // axfer
     itxn_field TypeEnum
-    // crowdfund.py:432
+    // crowdfund.py:434
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:427-433
+    // crowdfund.py:429-435
     // itxn.AssetTransfer(
     //     xfer_asset=self.asa_id.value,
     //     asset_receiver=self.creator.value,
@@ -1303,12 +1303,12 @@ creator_reclaim_asa:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:434
+    // crowdfund.py:436
     // self.asa_id.value = UInt64(0)  # app no longer holds the ASA
     bytec_0 // "asa_id"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:415-421
+    // crowdfund.py:417-423
     // # ── creator_reclaim_asa ─────────────────────────────────────────────────────
     // # Failure only. The creator's failure-side counterpart to refund: closes the
     // # app's entire deposited project-token holding back to the CREATOR.
@@ -1322,7 +1322,7 @@ creator_reclaim_asa:
 
 // crowdfund.Crowdfund.admin_sweep_asa[routing]() -> void:
 admin_sweep_asa:
-    // crowdfund.py:448
+    // crowdfund.py:450
     // asa_id = self.asa_id.value
     intc_0 // 0
     bytec_0 // "asa_id"
@@ -1331,22 +1331,22 @@ admin_sweep_asa:
     dup
     uncover 2
     assert // check self.asa_id exists
-    // crowdfund.py:449-452
+    // crowdfund.py:451-454
     // asa_sweep_ok = asa_id != 0 and (
     //     (self._succeeded() and not self._is_cancelled() and self._success_grace_expired())
     //     or (self._failed() and self._failure_grace_expired())
     // )
     bz admin_sweep_asa_bool_false@8
-    // crowdfund.py:218
+    // crowdfund.py:220
     // return self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:450
+    // crowdfund.py:452
     // (self._succeeded() and not self._is_cancelled() and self._success_grace_expired())
     bz admin_sweep_asa_or_contd@5
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1354,14 +1354,14 @@ admin_sweep_asa:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:450
+    // crowdfund.py:452
     // (self._succeeded() and not self._is_cancelled() and self._success_grace_expired())
     bnz admin_sweep_asa_or_contd@5
     callsub _success_grace_expired
     bnz admin_sweep_asa_bool_true@7
 
 admin_sweep_asa_or_contd@5:
-    // crowdfund.py:451
+    // crowdfund.py:453
     // or (self._failed() and self._failure_grace_expired())
     callsub _failed
     bz admin_sweep_asa_bool_false@8
@@ -1372,20 +1372,20 @@ admin_sweep_asa_bool_true@7:
     intc_1 // 1
 
 admin_sweep_asa_bool_merge@9:
-    // crowdfund.py:453
+    // crowdfund.py:455
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:454
+    // crowdfund.py:456
     // assert self._is_admin()
     callsub _is_admin
     assert
-    // crowdfund.py:455
+    // crowdfund.py:457
     // assert asa_sweep_ok, "grace not expired"
     assert // grace not expired
-    // crowdfund.py:456-462
+    // crowdfund.py:458-464
     // itxn.AssetTransfer(
     //     xfer_asset=asa_id,
     //     asset_receiver=self.admin.value,
@@ -1394,7 +1394,7 @@ admin_sweep_asa_bool_merge@9:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:458
+    // crowdfund.py:460
     // asset_receiver=self.admin.value,
     intc_0 // 0
     bytec 7 // "admin"
@@ -1402,21 +1402,21 @@ admin_sweep_asa_bool_merge@9:
     assert // check self.admin exists
     dup
     itxn_field AssetCloseTo
-    // crowdfund.py:459
+    // crowdfund.py:461
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // crowdfund.py:456
+    // crowdfund.py:458
     // itxn.AssetTransfer(
     intc_2 // axfer
     itxn_field TypeEnum
-    // crowdfund.py:461
+    // crowdfund.py:463
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:456-462
+    // crowdfund.py:458-464
     // itxn.AssetTransfer(
     //     xfer_asset=asa_id,
     //     asset_receiver=self.admin.value,
@@ -1425,12 +1425,12 @@ admin_sweep_asa_bool_merge@9:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:463
+    // crowdfund.py:465
     // self.asa_id.value = UInt64(0)  # app no longer holds the ASA
     bytec_0 // "asa_id"
     intc_0 // 0
     app_global_put
-    // crowdfund.py:436-446
+    // crowdfund.py:438-448
     // # ── admin_sweep_asa ─────────────────────────────────────────────────────────
     // # Decoupled ASA close-out to the ADMIN, kept separate from the ALGO close.
     // #   SUCCESS (success_grace_expired): sweeps tokens of investors who never
@@ -1453,19 +1453,19 @@ admin_sweep_asa_bool_false@8:
 // crowdfund.Crowdfund.admin_claim[routing]() -> void:
 admin_claim:
     pushbytes ""
-    // crowdfund.py:218
+    // crowdfund.py:220
     // return self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:498-501
+    // crowdfund.py:500-503
     // self._succeeded()
     // and not self._is_cancelled()
     // and self._success_grace_expired()
     // and self.asa_id.value == 0
     bz admin_claim_bool_false@6
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1473,25 +1473,25 @@ admin_claim:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:499
+    // crowdfund.py:501
     // and not self._is_cancelled()
     bnz admin_claim_bool_false@6
-    // crowdfund.py:500
+    // crowdfund.py:502
     // and self._success_grace_expired()
     callsub _success_grace_expired
-    // crowdfund.py:498-501
+    // crowdfund.py:500-503
     // self._succeeded()
     // and not self._is_cancelled()
     // and self._success_grace_expired()
     // and self.asa_id.value == 0
     bz admin_claim_bool_false@6
-    // crowdfund.py:501
+    // crowdfund.py:503
     // and self.asa_id.value == 0
     intc_0 // 0
     bytec_0 // "asa_id"
     app_global_get_ex
     assert // check self.asa_id exists
-    // crowdfund.py:498-501
+    // crowdfund.py:500-503
     // self._succeeded()
     // and not self._is_cancelled()
     // and self._success_grace_expired()
@@ -1500,29 +1500,29 @@ admin_claim:
     intc_1 // 1
 
 admin_claim_bool_merge@7:
-    // crowdfund.py:504
+    // crowdfund.py:506
     // self._failed()
     callsub _failed
-    // crowdfund.py:504-506
+    // crowdfund.py:506-508
     // self._failed()
     // and self._failure_grace_expired()
     // and self.asa_id.value == 0
     bz admin_claim_bool_false@11
-    // crowdfund.py:505
+    // crowdfund.py:507
     // and self._failure_grace_expired()
     callsub _failure_grace_expired
-    // crowdfund.py:504-506
+    // crowdfund.py:506-508
     // self._failed()
     // and self._failure_grace_expired()
     // and self.asa_id.value == 0
     bz admin_claim_bool_false@11
-    // crowdfund.py:506
+    // crowdfund.py:508
     // and self.asa_id.value == 0
     intc_0 // 0
     bytec_0 // "asa_id"
     app_global_get_ex
     assert // check self.asa_id exists
-    // crowdfund.py:504-506
+    // crowdfund.py:506-508
     // self._failed()
     // and self._failure_grace_expired()
     // and self.asa_id.value == 0
@@ -1531,13 +1531,13 @@ admin_claim_bool_merge@7:
     swap
 
 admin_claim_bool_merge@12:
-    // crowdfund.py:508
+    // crowdfund.py:510
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:509
+    // crowdfund.py:511
     // assert self._is_admin() or self._is_creator()
     callsub _is_admin
     bnz admin_claim_bool_true@14
@@ -1548,10 +1548,10 @@ admin_claim_bool_true@14:
     intc_1 // 1
 
 admin_claim_bool_merge@16:
-    // crowdfund.py:509
+    // crowdfund.py:511
     // assert self._is_admin() or self._is_creator()
     assert
-    // crowdfund.py:510
+    // crowdfund.py:512
     // assert self.admin_claimed.value == 0
     intc_0 // 0
     bytec 11 // "admin_claimed"
@@ -1559,13 +1559,13 @@ admin_claim_bool_merge@16:
     assert // check self.admin_claimed exists
     !
     assert
-    // crowdfund.py:511
+    // crowdfund.py:513
     // assert success_close_ok or failure_close_ok, "grace not expired"
     dup
     uncover 2
     ||
     assert // grace not expired
-    // crowdfund.py:512-515
+    // crowdfund.py:514-517
     // # On a success close where the 4% fee was never collected, pay the admin
     // # their fee FIRST (a normal transfer — must precede the close, since after
     // # the close there is no balance left to pay from), then mark it claimed.
@@ -1576,7 +1576,7 @@ admin_claim_bool_merge@16:
     app_global_get_ex
     assert // check self.admin_fee_claimed exists
     bnz admin_claim_after_if_else@22
-    // crowdfund.py:516
+    // crowdfund.py:518
     // admin_fee = (self.goal.value * SUCCESS_FEE_PCT) // UInt64(100)
     intc_0 // 0
     bytec_3 // "goal"
@@ -1588,17 +1588,17 @@ admin_claim_bool_merge@16:
     /
     dup
     bury 2
-    // crowdfund.py:517
+    // crowdfund.py:519
     // if admin_fee > 0:
     bz admin_claim_after_if_else@21
-    // crowdfund.py:518-522
+    // crowdfund.py:520-524
     // itxn.Payment(
     //     receiver=self.admin.value,
     //     amount=admin_fee,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:519
+    // crowdfund.py:521
     // receiver=self.admin.value,
     intc_0 // 0
     bytec 7 // "admin"
@@ -1607,15 +1607,15 @@ admin_claim_bool_merge@16:
     dig 1
     itxn_field Amount
     itxn_field Receiver
-    // crowdfund.py:518
+    // crowdfund.py:520
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // crowdfund.py:521
+    // crowdfund.py:523
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:518-522
+    // crowdfund.py:520-524
     // itxn.Payment(
     //     receiver=self.admin.value,
     //     amount=admin_fee,
@@ -1624,14 +1624,14 @@ admin_claim_bool_merge@16:
     itxn_submit
 
 admin_claim_after_if_else@21:
-    // crowdfund.py:523
+    // crowdfund.py:525
     // self.admin_fee_claimed.value = UInt64(1)
     bytec 9 // "admin_fee_claimed"
     intc_1 // 1
     app_global_put
 
 admin_claim_after_if_else@22:
-    // crowdfund.py:524-531
+    // crowdfund.py:526-533
     // # Close the full remaining balance to the CREATOR. Identical inner txn for
     // # both success and failure paths.
     // itxn.Payment(
@@ -1641,7 +1641,7 @@ admin_claim_after_if_else@22:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // crowdfund.py:527
+    // crowdfund.py:529
     // receiver=self.creator.value,
     intc_0 // 0
     bytec 6 // "creator"
@@ -1649,22 +1649,22 @@ admin_claim_after_if_else@22:
     assert // check self.creator exists
     dup
     itxn_field CloseRemainderTo
-    // crowdfund.py:528
+    // crowdfund.py:530
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // crowdfund.py:524-526
+    // crowdfund.py:526-528
     // # Close the full remaining balance to the CREATOR. Identical inner txn for
     // # both success and failure paths.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // crowdfund.py:530
+    // crowdfund.py:532
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // crowdfund.py:524-531
+    // crowdfund.py:526-533
     // # Close the full remaining balance to the CREATOR. Identical inner txn for
     // # both success and failure paths.
     // itxn.Payment(
@@ -1674,12 +1674,12 @@ admin_claim_after_if_else@22:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // crowdfund.py:532
+    // crowdfund.py:534
     // self.admin_claimed.value = UInt64(1)
     bytec 11 // "admin_claimed"
     intc_1 // 1
     app_global_put
-    // crowdfund.py:465-495
+    // crowdfund.py:467-497
     // # ── admin_claim ─────────────────────────────────────────────────────────────
     // # GRACE-ONLY ALGO close, used to retire STALE contracts. No early/`owed`-based
     // # path, so nothing the close depends on can be desynchronized by ClearState.
@@ -1730,17 +1730,17 @@ admin_claim_bool_false@6:
 
 // crowdfund.Crowdfund.admin_cancel[routing]() -> void:
 admin_cancel:
-    // crowdfund.py:538
+    // crowdfund.py:540
     // assert Global.group_size == 1
     global GroupSize
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:539
+    // crowdfund.py:541
     // assert self._is_admin()
     callsub _is_admin
     assert
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1748,11 +1748,11 @@ admin_cancel:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:540
+    // crowdfund.py:542
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:541
+    // crowdfund.py:543
     // assert self.funded_round.value == 0
     intc_0 // 0
     bytec_1 // "funded_round"
@@ -1760,12 +1760,12 @@ admin_cancel:
     assert // check self.funded_round exists
     !
     assert
-    // crowdfund.py:542
+    // crowdfund.py:544
     // self.cancelled.value = UInt64(1)
     bytec_2 // "cancelled"
     intc_1 // 1
     app_global_put
-    // crowdfund.py:534-536
+    // crowdfund.py:536-538
     // # ── admin_cancel ────────────────────────────────────────────────────────────
     // # Only before success. Cannot cancel a funded campaign.
     // @abimethod
@@ -1775,11 +1775,11 @@ admin_cancel:
 
 // crowdfund.Crowdfund.delete[routing]() -> void:
 delete:
-    // crowdfund.py:547
+    // crowdfund.py:549
     // assert self._is_admin()
     callsub _is_admin
     assert
-    // crowdfund.py:548
+    // crowdfund.py:550
     // assert self.admin_claimed.value == 1
     intc_0 // 0
     bytec 11 // "admin_claimed"
@@ -1788,7 +1788,7 @@ delete:
     intc_1 // 1
     ==
     assert
-    // crowdfund.py:544-545
+    // crowdfund.py:546-547
     // # ── on_delete ─────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
@@ -1797,7 +1797,7 @@ delete:
 
 // crowdfund.Crowdfund.closeout[routing]() -> void:
 closeout:
-    // crowdfund.py:557
+    // crowdfund.py:559
     // assert self.contrib[Txn.sender] == 0
     txn Sender
     intc_0 // 0
@@ -1806,7 +1806,7 @@ closeout:
     assert // check self.contrib exists for account
     !
     assert
-    // crowdfund.py:554-555
+    // crowdfund.py:556-557
     // # ── on_closeout ─────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["CloseOut"])
     intc_1 // 1
@@ -1815,7 +1815,7 @@ closeout:
 
 // crowdfund.Crowdfund.optin[routing]() -> void:
 optin:
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1823,21 +1823,21 @@ optin:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:562
+    // crowdfund.py:564
     // assert not self._is_cancelled()
     !
     assert
-    // crowdfund.py:563
+    // crowdfund.py:565
     // assert self._before_deadline()
     callsub _before_deadline
     assert
-    // crowdfund.py:564
+    // crowdfund.py:566
     // self.contrib[Txn.sender] = UInt64(0)
     txn Sender
     bytec 4 // "contrib"
     intc_0 // 0
     app_local_put
-    // crowdfund.py:559-560
+    // crowdfund.py:561-562
     // # ── on_optin ────────────────────────────────────────────────────────────────
     // @abimethod(allow_actions=["OptIn"])
     intc_1 // 1
@@ -1846,7 +1846,7 @@ optin:
 
 // crowdfund.Crowdfund._is_creator() -> uint64:
 _is_creator:
-    // crowdfund.py:178
+    // crowdfund.py:180
     // return Txn.sender == self.creator.value
     txn Sender
     intc_0 // 0
@@ -1859,7 +1859,7 @@ _is_creator:
 
 // crowdfund.Crowdfund._is_admin() -> uint64:
 _is_admin:
-    // crowdfund.py:182
+    // crowdfund.py:184
     // return Txn.sender == self.admin.value
     txn Sender
     intc_0 // 0
@@ -1872,7 +1872,7 @@ _is_admin:
 
 // crowdfund.Crowdfund._before_deadline() -> uint64:
 _before_deadline:
-    // crowdfund.py:186
+    // crowdfund.py:188
     // return Global.round <= self.deadline.value
     global Round
     intc_0 // 0
@@ -1885,32 +1885,32 @@ _before_deadline:
 
 // crowdfund.Crowdfund._success_grace_expired() -> uint64:
 _success_grace_expired:
-    // crowdfund.py:200
+    // crowdfund.py:202
     // self.funded_round.value > UInt64(0)
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:200-201
+    // crowdfund.py:202-203
     // self.funded_round.value > UInt64(0)
     // and Global.round > self.funded_round.value + GRACE_PERIOD_ROUNDS
     bz _success_grace_expired_bool_false@3
-    // crowdfund.py:201
+    // crowdfund.py:203
     // and Global.round > self.funded_round.value + GRACE_PERIOD_ROUNDS
     global Round
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    intc 7 // 5580866
+    pushint 10
     +
     >
-    // crowdfund.py:200-201
+    // crowdfund.py:202-203
     // self.funded_round.value > UInt64(0)
     // and Global.round > self.funded_round.value + GRACE_PERIOD_ROUNDS
     bz _success_grace_expired_bool_false@3
     intc_1 // 1
-    // crowdfund.py:198-202
+    // crowdfund.py:200-204
     // # success: measured from the round the goal was met (funded_round).
     // return (
     //     self.funded_round.value > UInt64(0)
@@ -1920,7 +1920,7 @@ _success_grace_expired:
 
 _success_grace_expired_bool_false@3:
     intc_0 // 0
-    // crowdfund.py:198-202
+    // crowdfund.py:200-204
     // # success: measured from the round the goal was met (funded_round).
     // return (
     //     self.funded_round.value > UInt64(0)
@@ -1931,7 +1931,7 @@ _success_grace_expired_bool_false@3:
 
 // crowdfund.Crowdfund._failure_grace_expired() -> uint64:
 _failure_grace_expired:
-    // crowdfund.py:206-209
+    // crowdfund.py:208-211
     // # failure: measured from the deadline (funded_round == 0 on failure, so a
     // # funded_round-based clock would read "already expired"; keying off the
     // # deadline gives investors a real 6-month window to refund).
@@ -1941,7 +1941,7 @@ _failure_grace_expired:
     bytec 10 // "deadline"
     app_global_get_ex
     assert // check self.deadline exists
-    intc 7 // 5580866
+    pushint 10
     +
     >
     retsub
@@ -1949,18 +1949,18 @@ _failure_grace_expired:
 
 // crowdfund.Crowdfund._failed() -> uint64:
 _failed:
-    // crowdfund.py:222
+    // crowdfund.py:224
     // return self.funded_round.value == UInt64(0) and (
     intc_0 // 0
     bytec_1 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    // crowdfund.py:222-224
+    // crowdfund.py:224-226
     // return self.funded_round.value == UInt64(0) and (
     //     self._is_cancelled() or self._after_deadline()
     // )
     bnz _failed_bool_false@4
-    // crowdfund.py:194
+    // crowdfund.py:196
     // return self.cancelled.value == 1
     intc_0 // 0
     bytec_2 // "cancelled"
@@ -1968,10 +1968,10 @@ _failed:
     assert // check self.cancelled exists
     intc_1 // 1
     ==
-    // crowdfund.py:223
+    // crowdfund.py:225
     // self._is_cancelled() or self._after_deadline()
     bnz _failed_bool_true@3
-    // crowdfund.py:190
+    // crowdfund.py:192
     // return Global.round > self.deadline.value
     global Round
     intc_0 // 0
@@ -1979,13 +1979,13 @@ _failed:
     app_global_get_ex
     assert // check self.deadline exists
     >
-    // crowdfund.py:223
+    // crowdfund.py:225
     // self._is_cancelled() or self._after_deadline()
     bz _failed_bool_false@4
 
 _failed_bool_true@3:
     intc_1 // 1
-    // crowdfund.py:222-224
+    // crowdfund.py:224-226
     // return self.funded_round.value == UInt64(0) and (
     //     self._is_cancelled() or self._after_deadline()
     // )
@@ -1993,7 +1993,7 @@ _failed_bool_true@3:
 
 _failed_bool_false@4:
     intc_0 // 0
-    // crowdfund.py:222-224
+    // crowdfund.py:224-226
     // return self.funded_round.value == UInt64(0) and (
     //     self._is_cancelled() or self._after_deadline()
     // )
