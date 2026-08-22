@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
@@ -7,7 +8,14 @@ import { registerProject } from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { Icon, Cover, categoryHue } from '../components/UI'
 
-const FUND_AMOUNT = 400_000 // 0.4 ALGO in microALGO
+// The escrow only needs its account minimum balance to exist and hold global
+// state — every inner transaction in the contract (refunds, closes, payouts) uses
+// fee=0 / pooled fees paid by the caller's outer transaction, so the escrow never
+// pays a fee from its own balance. We read the escrow's actual min-balance from
+// algod and fund only the shortfall above it, plus a small buffer. On a retry
+// (e.g. the fund succeeded but registration failed) this re-reads the balance and
+// skips the payment entirely if the escrow is already funded — no double-send.
+const FUND_BUFFER = 10_000 // 0.01 ALGO headroom above min-balance
 
 export default function DonationSetup() {
   const navigate  = useNavigate()
@@ -19,6 +27,7 @@ export default function DonationSetup() {
 
   const [status, setStatus]   = useState('idle') // idle | funding | registering | done | error
   const [errMsg, setErrMsg]   = useState('')
+  const [depositAlgo, setDepositAlgo] = useState(null) // computed shortfall, in ALGO
 
   // Guard: if someone lands here without state (e.g. direct URL), redirect home.
   useEffect(() => {
@@ -43,15 +52,36 @@ export default function DonationSetup() {
     setStatus('funding')
     setErrMsg('')
     try {
-      // Step 1: send 0.4 ALGO to the escrow so inner transactions can pay fees
-      const sp = await algodClient.getTransactionParams().do()
-      const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: activeAddress,
-        receiver: appAddress,
-        amount: FUND_AMOUNT,
-        suggestedParams: { ...sp, flatFee: true, fee: 1000 },
-      })
-      await signAndSendTxns(fundTxn)
+      // Step 1: top up the escrow to its minimum balance (idempotent).
+      // Read the escrow's current balance and min-balance; fund only the shortfall.
+      // If it's already funded (e.g. this is a retry after registration failed),
+      // the shortfall is 0 and we skip the payment entirely — no wasted ALGO.
+      let currentBalance = 0
+      let currentMinBalance = 100_000 // sensible floor if the account read fails
+      try {
+        const acct = await algodClient.accountInformation(appAddress).do()
+        currentBalance = Number(acct?.amount ?? 0)
+        currentMinBalance = Number(acct?.['min-balance'] ?? acct?.minBalance ?? currentMinBalance)
+      } catch {
+        // Account may not exist yet — treat as empty, fund from the floor.
+        currentBalance = 0
+      }
+
+      const targetBalance = currentMinBalance + FUND_BUFFER
+      const shortfall = Math.max(0, targetBalance - currentBalance)
+      setDepositAlgo(shortfall / 1_000_000)
+
+      if (shortfall > 0) {
+        const sp = await algodClient.getTransactionParams().do()
+        const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+          sender: activeAddress,
+          receiver: appAddress,
+          amount: shortfall,
+          suggestedParams: { ...sp, flatFee: true, fee: 1000 },
+        })
+        await signAndSendTxns(fundTxn)
+      }
+      // If shortfall is 0 the escrow is already funded — skip straight to register.
 
       // Step 2: register in Supabase with isDonation: true — only now does the
       // campaign become visible on the explore grid
@@ -71,7 +101,7 @@ export default function DonationSetup() {
       const msg = e?.message || ''
       setErrMsg(
         msg.includes('overspend') || msg.includes('below min') || msg.includes('insufficient')
-          ? 'Insufficient funds. Make sure your wallet has at least 0.4 ALGO plus fees available.'
+          ? 'Insufficient funds. Make sure your wallet has enough ALGO to cover the escrow minimum-balance deposit plus fees.'
           : msg || 'Something went wrong. You can try again — your contract is already deployed.'
       )
       setStatus('error')
@@ -105,8 +135,9 @@ export default function DonationSetup() {
           </h1>
           <p style={{ fontSize: 17, lineHeight: 1.65, color: 'var(--text-muted)', marginTop: 16, maxWidth: 520 }}>
             Your contract is deployed on Algorand. Before your campaign goes live,
-            a small deposit of <strong style={{ color: 'var(--text)' }}>0.4 ALGO</strong> needs
-            to be sent to the contract's escrow account.
+            a small <strong style={{ color: 'var(--text)' }}>minimum-balance deposit</strong> needs
+            to be sent to the contract's escrow account so it can exist on-chain and
+            hold your campaign's state.
           </p>
 
           <div style={{
@@ -114,8 +145,8 @@ export default function DonationSetup() {
             margin: '32px 0', maxWidth: 520,
           }}>
             {[
-              { ic: <Icon.lock />, t: 'Covers transaction fees', d: 'Algorand smart contracts need a minimum balance to execute inner transactions — like refunding backers if your campaign doesn\'t reach its goal.' },
-              { ic: <Icon.refund />, t: 'Protects your backers', d: 'Without this deposit, refund transactions would fail. This ensures every backer can always recover their ALGO.' },
+              { ic: <Icon.lock />, t: 'Keeps the contract on-chain', d: 'Every Algorand account needs a minimum balance to exist. This deposit lets your campaign\'s escrow account hold its on-chain state.' },
+              { ic: <Icon.refund />, t: 'Refunds are always covered', d: 'If your campaign doesn\'t reach its goal, backers reclaim their ALGO in full — each refund pays its own network fee, so the escrow never runs dry.' },
               { ic: <Icon.check />, t: 'Goes live immediately', d: 'Once the deposit is confirmed your campaign appears on the explore page and is open for contributions.' },
             ].map(s => (
               <div key={s.t} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
@@ -181,8 +212,12 @@ export default function DonationSetup() {
               <>
                 <div>
                   <div style={{ fontSize: 13, color: 'var(--text-faint)', marginBottom: 4 }}>Deposit required</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em' }}>0.4 <span style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500 }}>ALGO</span></div>
-                  <div style={{ fontSize: 12.5, color: 'var(--text-faint)', marginTop: 4 }}>+ ~0.001 ALGO transaction fee</div>
+                  <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    {depositAlgo === null ? '~0.1' : depositAlgo === 0 ? '0' : depositAlgo.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')} <span style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500 }}>ALGO</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-faint)', marginTop: 4 }}>
+                    {depositAlgo === 0 ? 'Escrow already funded — no deposit needed' : '+ ~0.001 ALGO transaction fee'}
+                  </div>
                 </div>
 
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.55 }}>
