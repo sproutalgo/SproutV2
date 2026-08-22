@@ -1,0 +1,26 @@
+{
+  "name": "algolaunch-backend",
+  "version": "1.0.0",
+  "description": "AlgoLaunch crowdfunding backend API",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:migrate": "node src/utils/migrate.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "algosdk": "^3.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "node-cron": "^3.0.3",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  }
+}

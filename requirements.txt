@@ -1,0 +1,6 @@
+# Puya / Algorand Python toolchain (replaces PyTeal).
+# Compile with:  puyapy crowdfund.py
+# (or, if you use AlgoKit:  algokit compile py crowdfund.py)
+algorand-python>=4.0.0
+puyapy>=5.10.0
+py-algorand-sdk>=2.0.0

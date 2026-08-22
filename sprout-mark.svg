@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" role="img" aria-label="Sprout">
+  <defs>
+    <linearGradient id="sproutGrad" gradientUnits="userSpaceOnUse" x1="32" y1="20" x2="60" y2="95">
+      <stop offset="0" stop-color="#5FE39B"></stop>
+      <stop offset="1" stop-color="#1E9E5E"></stop>
+    </linearGradient>
+  </defs>
+  <path d="M50 91 C 49 73 47 64 55 56" stroke="url(#sproutGrad)" stroke-width="7" stroke-linecap="round"></path>
+  <path d="M54 60 Q77.2 53.7 81 30 Q57.8 36.3 54 60 Z" fill="url(#sproutGrad)"></path>
+  <path d="M50 64 Q45.1 46.5 27 44 Q31.9 61.6 50 64 Z" fill="url(#sproutGrad)"></path>
+</svg>
