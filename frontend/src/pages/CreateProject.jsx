@@ -351,7 +351,7 @@ export default function CreateProject() {
                       {form.highlights.map((h, i) => (
                         <div className="hi-row" key={i}>
                           <span className="hi-bullet"><Icon.check /></span>
-                          <input id={`highlight-${i}`} name={`highlight-${i}`} aria-label={`Highlight ${i + 1}`} className="input" placeholder={['e.g. Audited by two independent firms', 'e.g. Live on mainnet with 1,400+ wallets', 'e.g. Backed by the Algorand Foundation'][i]} value={h} onChange={setHi(i)} />
+                          <input id={`highlight-${i}`} name={`highlight-${i}`} aria-label={`Highlight ${i + 1}`} className="input" maxLength={500} placeholder={['e.g. Audited by two independent firms', 'e.g. Live on mainnet with 1,400+ wallets', 'e.g. Backed by the Algorand Foundation'][i]} value={h} onChange={setHi(i)} />
                         </div>
                       ))}
                     </div>
@@ -383,11 +383,14 @@ export default function CreateProject() {
 
                   <div className="field" style={{ marginBottom: 12 }}>
                     <label htmlFor="cp-milestone-title">This milestone</label>
-                    <input id="cp-milestone-title" className="input" placeholder="e.g. This Milestone — Mainnet Launch" value={milestoneTitle} onChange={e => setMilestoneTitle(e.target.value)} />
+                    <input id="cp-milestone-title" className="input" maxLength={80} placeholder="e.g. This Milestone — Mainnet Launch" value={milestoneTitle} onChange={e => setMilestoneTitle(e.target.value)} />
                   </div>
                   <div className="field" style={{ marginBottom: 12 }}>
                     <label htmlFor="cp-milestone-desc">Milestone description</label>
-                    <textarea id="cp-milestone-desc" className="textarea" style={{ minHeight: 60 }} placeholder="What will be delivered in this milestone?" value={milestoneDesc} onChange={e => setMilestoneDesc(e.target.value)} />
+                    <textarea id="cp-milestone-desc" className="textarea" maxLength={500} style={{ minHeight: 60 }} placeholder="What will be delivered in this milestone?" value={milestoneDesc} onChange={e => setMilestoneDesc(e.target.value)} />
+                    <span className="field-hint" style={{ color: milestoneDesc.length >= 500 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {milestoneDesc.length}/500 characters
+                    </span>
                   </div>
                   <div className="field" style={{ marginBottom: 12 }}>
                     <label htmlFor="cp-series-goal">Total series goal (ALGO) — optional</label>
@@ -417,6 +420,7 @@ export default function CreateProject() {
                           name={`planned-milestone-${i}`}
                           aria-label={`Planned milestone ${i + 1} title`}
                           className="input"
+                          maxLength={80}
                           placeholder="Next Milestone Title"
                           value={m.title}
                           onChange={e => updatePlannedMilestone(i, 'title', e.target.value)}

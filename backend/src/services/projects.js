@@ -161,6 +161,27 @@ export async function createProject({
   const urlError = validateWebsiteUrl(websiteUrl)
   if (urlError) throw new Error(urlError)
 
+  // Highlights: up to 3 scannable reasons, each ≤ 500 chars.
+  if (highlights != null) {
+    if (!Array.isArray(highlights)) throw new Error('highlights must be a list')
+    if (highlights.length > 3) throw new Error('highlights cannot exceed 3 items')
+    for (const h of highlights) {
+      if (String(h || '').length > 500) throw new Error('each highlight exceeds 500 characters')
+    }
+  }
+  // Milestone fields (series campaigns).
+  if (String(milestoneTitle || '').length > 80) throw new Error('milestone title exceeds 80 characters')
+  if (String(milestoneDescription || '').length > 500) throw new Error('milestone description exceeds 500 characters')
+  // Planned future milestones: up to 4, each title ≤ 80 chars (+ optional short desc).
+  if (plannedMilestones != null) {
+    if (!Array.isArray(plannedMilestones)) throw new Error('plannedMilestones must be a list')
+    if (plannedMilestones.length > 4) throw new Error('plannedMilestones cannot exceed 4 items')
+    for (const m of plannedMilestones) {
+      if (String(m?.title || '').length > 80) throw new Error('each planned milestone title exceeds 80 characters')
+      if (String(m?.description || '').length > 500) throw new Error('each planned milestone description exceeds 500 characters')
+    }
+  }
+
   // Series total goal: only meaningful for series members, must be a sane
   // positive integer at least as large as this campaign's own goal.
   let seriesGoal = null
@@ -181,7 +202,7 @@ export async function createProject({
       creator_address:      creatorAddress,
       name:                 String(name).slice(0, 60),
       tagline:              String(tagline    || '').slice(0, 120),
-      description:          String(description || '').slice(0, 2000),
+      description:          String(description || '').slice(0, 5000),
       category:             category   || 'Other',
       website_url:          String(websiteUrl || '').slice(0, 200),
       deck_url:             deckUrl    || '',
@@ -191,13 +212,20 @@ export async function createProject({
       rate_per_algo:        Number(ratePerAlgo),
       algo_per_bundle:      algoPerBundle != null ? Number(algoPerBundle) : 1,
       is_donation:          Boolean(isDonation),
-      highlights:           highlights || null,
+      highlights:           Array.isArray(highlights)
+                              ? highlights.slice(0, 3).map(h => String(h || '').slice(0, 500))
+                              : null,
       series_id:            seriesId || null,
       series_goal_micro:    seriesGoal,
       milestone_number:     milestoneNumber ? Number(milestoneNumber) : null,
-      milestone_title:      milestoneTitle || null,
-      milestone_description: milestoneDescription || null,
-      planned_milestones:   plannedMilestones || null,
+      milestone_title:      milestoneTitle ? String(milestoneTitle).slice(0, 80) : null,
+      milestone_description: milestoneDescription ? String(milestoneDescription).slice(0, 500) : null,
+      planned_milestones:   Array.isArray(plannedMilestones)
+                              ? plannedMilestones.slice(0, 4).map(m => ({
+                                  title:       String(m?.title || '').slice(0, 80),
+                                  description: String(m?.description || '').slice(0, 500),
+                                }))
+                              : null,
     })
     .select()
     .single()
