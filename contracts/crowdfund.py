@@ -72,10 +72,10 @@ from algopy import (
 from algopy.arc4 import abimethod
 
 # ── Constants (module-level compile-time constants must be plain ints) ────────
-#GRACE_PERIOD_ROUNDS = 5_580_866   # ~6 months at 2.8 s/block
-GRACE_PERIOD_ROUNDS = 10
-#ROUNDS_PER_DAY = 30_857           # 86400 / 2.8 rounded
-ROUNDS_PER_DAY = 10
+#GRACE_PERIOD_ROUNDS = 5_580_866   # ~6 months at 2.8 s/block  (MAINNET value)
+GRACE_PERIOD_ROUNDS = 10           # TESTNET: compressed for fast dry-run
+#ROUNDS_PER_DAY = 30_857           # 86400 / 2.8 rounded  (MAINNET value)
+ROUNDS_PER_DAY = 10               # TESTNET: compressed for fast dry-run
 MIN_DAYS = 1
 MAX_DAYS = 100
 MAX_GOAL = 100_000_000_000_000    # 100 million ALGO in microAlgos
@@ -225,10 +225,44 @@ class Crowdfund(ARC4Contract):
             self._is_cancelled() or self._after_deadline()
         )
 
+    # ── app_opt_in_asa ──────────────────────────────────────────────────────────
+    # Opts the APP account into the project ASA in ITS OWN transaction, submitted
+    # and confirmed BEFORE the setup group.
+    #
+    # Why this exists (subtle but load-bearing): Puya binds a method's transaction
+    # argument to the group slot immediately BEFORE the call (GroupIndex - 1). So in
+    # the setup group [AssetTransfer, setup], the token-pool transfer executes first,
+    # before setup's body runs. If the app opted into the ASA inside setup (as it did
+    # originally), the transfer would arrive at an app that isn't opted in yet and
+    # fail with "receiver error: must optin". Opting in here, in a separate prior
+    # transaction, guarantees the app can receive the pool when setup runs.
+    #
+    # (The original PyTeal used group order [appCall, transfer], so its inner opt-in
+    # ran before the transfer — the ARC-4 port's mandatory reordering is what made a
+    # dedicated opt-in necessary.)
+    #
+    # Gated to run only before setup completes (asa_id still 0), creator-only, before
+    # the deadline. Fee 2000 on the call covers the single pooled inner opt-in.
+    @abimethod
+    def app_opt_in_asa(self, asset: Asset) -> None:
+        assert self._is_creator()
+        assert self.asa_id.value == 0        # only before setup writes asa_id
+        assert not self._is_cancelled()
+        assert self._before_deadline()
+        assert Txn.num_assets == 1
+        itxn.AssetTransfer(
+            xfer_asset=asset,
+            asset_receiver=Global.current_application_address,
+            asset_amount=0,
+            fee=0,
+        ).submit()
+
     # ── setup ─────────────────────────────────────────────────────────────────
     # ARC-4 group: [0] AssetTransfer(tokens from creator to app), [1] AppCall("setup").
-    # The token transfer is passed as the method's transaction argument, so ARC-4
-    # tooling places it immediately before this app call.
+    # The token transfer is passed as the method's transaction argument, so Puya
+    # places it immediately before this app call (GroupIndex - 1) and the transfer
+    # executes first. The app MUST already be opted into the ASA by then — call
+    # app_opt_in_asa in a prior transaction (see that method for the full rationale).
     @abimethod
     def setup(self, asset: Asset, token_pay: gtxn.AssetTransferTransaction) -> None:
         app_addr = Global.current_application_address
@@ -276,13 +310,10 @@ class Crowdfund(ARC4Contract):
             pool_needed = whole_cap * df
             assert pool_needed <= SAFE_CEIL
 
-        # Inner opt-in to ASA (fee paid by caller via pooling)
-        itxn.AssetTransfer(
-            xfer_asset=asset,
-            asset_receiver=app_addr,
-            asset_amount=0,
-            fee=0,
-        ).submit()
+        # NOTE: the app is opted into the ASA earlier, via app_opt_in_asa, in a
+        # transaction that executes before this group. Opting in again here would
+        # fail (an account cannot opt into an ASA it already holds), so there is no
+        # inner opt-in in setup anymore.
 
         # Validate ASA token pool transfer covers the whole-token distribution at
         # full goal (floor-to-whole-tokens, scaled to base units).

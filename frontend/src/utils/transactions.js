@@ -145,18 +145,54 @@ export async function buildCreateAppTxnGroup({
 }
 
 /**
+ * App opt-in to the project ASA — a STANDALONE call that must run and confirm
+ * BEFORE the setup group.
+ *
+ * Why this exists (subtle but load-bearing): Puya binds setup's axfer argument to
+ * the group slot immediately BEFORE the setup call (GroupIndex - 1). So in the
+ * setup group [AssetTransfer, setup], the token-pool transfer executes first,
+ * before setup's body runs. The app account must already be opted into the ASA at
+ * that moment, or the transfer fails with "receiver error: must optin". This call
+ * performs that opt-in in its own prior transaction.
+ *
+ * (The original PyTeal used group order [appCall, transfer], so its inner opt-in
+ * ran before the transfer — the ARC-4 port's mandatory reordering is what makes a
+ * dedicated opt-in necessary.)
+ *
+ * LONE app call. Fee 2000 covers the single pooled inner opt-in (fee:0 inner).
+ * The asset id is both an ABI arg and in foreignAssets so the on-chain reference
+ * resolves.
+ */
+export async function buildAppOptInAsaTxn({ sender, appId, asaId }) {
+  const sp = await getSp(2000)
+  const m  = method('app_opt_in_asa')
+  const appArgs = buildAppArgs(m, [BigInt(asaId)])
+  return algosdk.makeApplicationNoOpTxnFromObject({
+    sender,
+    suggestedParams: sp,
+    appIndex: Number(appId),
+    appArgs,
+    foreignAssets: [Number(asaId)],
+  })
+}
+
+/**
  * Setup group (2 txns), ARC-4 order:
  *   [0] AssetTransfer (token pool: creator → app)  ← txn arg, placed first
  *   [1] AppCall "setup" (asset ref + the axfer)
  *
  * setup is gated: before deadline AND before any contribution (raised == 0).
- * Before calling setup the creator must fund the app account with enough ALGO
- * for minimum balance (a separate payment transaction).
- * Fee: 2000 on the app call covers the inner ASA opt-in (fee:0 → caller-pooled).
+ * PRECONDITIONS (run in order, each confirmed, BEFORE this group):
+ *   1. fund the app account for minimum balance (a separate payment),
+ *   2. call buildAppOptInAsaTxn so the app is opted into the ASA — REQUIRED,
+ *      because the token transfer at slot [0] executes before setup's body and
+ *      would otherwise hit an app that isn't opted in yet.
+ * The app no longer opts itself in inside setup (that inner opt-in was removed in
+ * the contract), so the app-call fee here is the standard 1000 — there is no
+ * inner transaction in setup anymore.
  */
 export async function buildSetupGroup({ sender, appId, asaId, goalMicroAlgos, tokensPerBundle, algoPerBundle, asaDecimals, appAddress }) {
   const sp      = await getSp()
-  const spInner = { ...sp, fee: 2000 } // covers inner ASA opt-in
 
   // Must match the contract's pool_needed (floor-to-whole-tokens, then scale):
   //   whole = floor(goal * tpb / (apb * 1e6));  pool = whole * 10^decimals
@@ -181,7 +217,7 @@ export async function buildSetupGroup({ sender, appId, asaId, goalMicroAlgos, to
 
   const appCallTxn = algosdk.makeApplicationNoOpTxnFromObject({
     sender,
-    suggestedParams: spInner,
+    suggestedParams: sp,        // standard fee: setup has no inner txn anymore
     appIndex: Number(appId),
     appArgs,
     foreignAssets: [Number(asaId)],

@@ -8,7 +8,7 @@ import {
   algoToMicro, signAndSend,
 } from '../utils/algorand'
 import { fetchCreatorProjectsMeta } from '../utils/api'
-import { buildSetupGroup, buildOptInTxn, encodeUnsignedTxns } from '../utils/transactions'
+import { buildSetupGroup, buildOptInTxn, buildAppOptInAsaTxn, encodeUnsignedTxns } from '../utils/transactions'
 import { useToast } from '../context/ToastContext'
 import {
   Cover, StatusBadge, Progress, IdTag, Icon, SkeletonCard,
@@ -231,7 +231,13 @@ export default function MyProjects() {
       } else {
         addToast('Step 1/2: Already opted in — skipping…', 'info', 2000)
       }
-      addToast('Step 2/2: Sending setup (ASA opt-in + token pool)…', 'info', 3000)
+      // The app must opt into the ASA BEFORE the setup group: Puya runs setup's
+      // token transfer (group slot -1) before setup's body, so the app has to
+      // already hold the ASA to receive the pool. Submit + confirm this first.
+      addToast('Step 2/2: Opting app into token…', 'info', 3000)
+      const optInAsa = await buildAppOptInAsaTxn({ sender: activeAddress, appId, asaId })
+      await signAndSend(signTransactions, [optInAsa.toByte()])
+      addToast('Step 2/2: Sending setup (token pool)…', 'info', 3000)
       const txns = await buildSetupGroup({ sender: activeAddress, appId, asaId, goalMicroAlgos, tokensPerBundle, algoPerBundle, asaDecimals: decimals, appAddress })
       const encoded = encodeUnsignedTxns(txns)
       await signAndSend(signTransactions, encoded)
