@@ -87,6 +87,14 @@ alter table projects add column if not exists on_chain_admin_fee_claimed boolean
 alter table projects add column if not exists on_chain_admin_claimed     boolean;
 alter table projects add column if not exists on_chain_deleted           boolean;
 alter table projects add column if not exists on_chain_synced_at         timestamptz;
+alter table projects add column if not exists is_donation           boolean not null default false;
+alter table projects add column if not exists highlights            jsonb;
+alter table projects add column if not exists series_id             text;
+alter table projects add column if not exists series_goal_micro     int8;
+alter table projects add column if not exists milestone_number      int8;
+alter table projects add column if not exists milestone_title       text;
+alter table projects add column if not exists milestone_description text;
+alter table projects add column if not exists planned_milestones    jsonb;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-level security
