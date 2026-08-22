@@ -1,3 +1,4 @@
+
 import algosdk from 'algosdk'
 import { algodClient } from './algorand'
 import arc56 from '../../../contracts/Crowdfund.arc56.json'
@@ -174,6 +175,71 @@ export async function buildAppOptInAsaTxn({ sender, appId, asaId }) {
     appArgs,
     foreignAssets: [Number(asaId)],
   })
+}
+
+/**
+ * Setup PREP group — the first of the two setup prompts. Combines into ONE atomic
+ * group (one wallet signature):
+ *   [0] Payment: fund the app account for minimum balance
+ *   [1] (optional) Creator opt-in to the app's local state — included ONLY if the
+ *       creator isn't already opted in (you cannot opt into an app twice)
+ *   [2] app_opt_in_asa: opts the APP account into the project ASA
+ *
+ * This must be submitted and confirmed BEFORE buildSetupGroup, because the app has
+ * to already hold the ASA when the setup group's token transfer executes (see
+ * buildAppOptInAsaTxn for the full ordering rationale). Merging these three prep
+ * steps into one group takes the setup flow from 4 wallet prompts down to 2, while
+ * leaving the setup group (and its group_size==2 security lock) completely
+ * untouched.
+ *
+ * `needsCreatorOptIn` — pass true when fetchLocalState(appId, creator) is null.
+ *
+ * Fees: fund 1000, opt-in 1000, app_opt_in_asa 2000 (covers its inner ASA opt-in).
+ * All set as flat fees on their own transactions, so no cross-transaction pooling
+ * assumptions — each transaction carries exactly what it needs.
+ *
+ * NOTE: the app account's minimum balance rises by 0.1 ALGO when it opts into the
+ * ASA (the app_opt_in_asa inner txn). The fund amount must cover base app MBR plus
+ * that 0.1 ALGO. The caller passes fundAmount; 400_000 (0.4 ALGO) is a safe value.
+ */
+export async function buildSetupPrepGroup({ sender, appId, asaId, fundAmount = 400_000, needsCreatorOptIn }) {
+  const sp = await getSp()
+
+  const appAddress = algosdk.getApplicationAddress(Number(appId))
+
+  const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender,
+    receiver: appAddress,
+    amount: Number(fundAmount),
+    suggestedParams: { ...sp, flatFee: true, fee: 1000 },
+  })
+
+  const txns = [fundTxn]
+
+  if (needsCreatorOptIn) {
+    const mOpt = method('optin')
+    const optInTxn = algosdk.makeApplicationOptInTxnFromObject({
+      sender,
+      suggestedParams: { ...sp, flatFee: true, fee: 1000 },
+      appIndex: Number(appId),
+      appArgs: buildAppArgs(mOpt, []),
+    })
+    txns.push(optInTxn)
+  }
+
+  const mAsa = method('app_opt_in_asa')
+  const appOptInAsaTxn = algosdk.makeApplicationNoOpTxnFromObject({
+    sender,
+    suggestedParams: { ...sp, flatFee: true, fee: 2000 }, // covers inner ASA opt-in
+    appIndex: Number(appId),
+    appArgs: buildAppArgs(mAsa, [BigInt(asaId)]),
+    foreignAssets: [Number(asaId)],
+  })
+  txns.push(appOptInAsaTxn)
+
+  // One atomic group → one wallet prompt.
+  algosdk.assignGroupID(txns)
+  return txns
 }
 
 /**

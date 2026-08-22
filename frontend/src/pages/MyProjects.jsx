@@ -8,7 +8,7 @@ import {
   algoToMicro, signAndSend,
 } from '../utils/algorand'
 import { fetchCreatorProjectsMeta } from '../utils/api'
-import { buildSetupGroup, buildOptInTxn, buildAppOptInAsaTxn, encodeUnsignedTxns } from '../utils/transactions'
+import { buildSetupGroup, buildSetupPrepGroup, encodeUnsignedTxns } from '../utils/transactions'
 import { useToast } from '../context/ToastContext'
 import {
   Cover, StatusBadge, Progress, IdTag, Icon, SkeletonCard,
@@ -216,27 +216,21 @@ export default function MyProjects() {
       // The builder needs decimals only to compute the token pool amount to send.
       const decimals = asaInfo.decimals ?? 0
 
-      addToast('Step 1/2: Funding app account for minimum balance…', 'info', 3000)
-      const sp = await algodClient.getTransactionParams().do()
-      const fundTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        sender: activeAddress, receiver: appAddress, amount: 400_000,
-        suggestedParams: { ...sp, flatFee: true, fee: 1000 },
-      })
-      await signAndSend(signTransactions, [fundTxn.toByte()])
+      // ── Prompt 1: combined prep group ──────────────────────────────────────
+      // Fund + (conditional) creator opt-in + app ASA opt-in, in ONE atomic group
+      // signed once. Must confirm before the setup group (the app has to hold the
+      // ASA before setup's token transfer runs).
       const existingLocalState = await fetchLocalState(appId, activeAddress)
-      if (existingLocalState === null) {
-        addToast('Step 1/2: Opting creator into app…', 'info', 3000)
-        const optInTxn = await buildOptInTxn({ sender: activeAddress, appId })
-        await signAndSend(signTransactions, [optInTxn.toByte()])
-      } else {
-        addToast('Step 1/2: Already opted in — skipping…', 'info', 2000)
-      }
-      // The app must opt into the ASA BEFORE the setup group: Puya runs setup's
-      // token transfer (group slot -1) before setup's body, so the app has to
-      // already hold the ASA to receive the pool. Submit + confirm this first.
-      addToast('Step 2/2: Opting app into token…', 'info', 3000)
-      const optInAsa = await buildAppOptInAsaTxn({ sender: activeAddress, appId, asaId })
-      await signAndSend(signTransactions, [optInAsa.toByte()])
+      const needsCreatorOptIn = existingLocalState === null
+      addToast('Step 1/2: Preparing app (fund + opt-ins)…', 'info', 3000)
+      const prepTxns = await buildSetupPrepGroup({
+        sender: activeAddress, appId, asaId,
+        fundAmount: 400_000,
+        needsCreatorOptIn,
+      })
+      await signAndSend(signTransactions, encodeUnsignedTxns(prepTxns))
+
+      // ── Prompt 2: setup group (unchanged, group_size==2) ───────────────────
       addToast('Step 2/2: Sending setup (token pool)…', 'info', 3000)
       const txns = await buildSetupGroup({ sender: activeAddress, appId, asaId, goalMicroAlgos, tokensPerBundle, algoPerBundle, asaDecimals: decimals, appAddress })
       const encoded = encodeUnsignedTxns(txns)
