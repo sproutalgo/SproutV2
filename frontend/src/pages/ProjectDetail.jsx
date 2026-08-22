@@ -29,7 +29,7 @@ function SeriesTimeline({ seriesId, currentAppId, meta, liveRaised = 0 }) {
     if (!seriesId) return
     fetchSeries(seriesId)
       .then(data => setSeries(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(e => { console.error('fetchSeries failed:', e) })
       .finally(() => setLoading(false))
   }, [seriesId])
 
