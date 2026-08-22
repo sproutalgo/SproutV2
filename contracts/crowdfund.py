@@ -466,6 +466,43 @@ class Crowdfund(ARC4Contract):
         ).submit()
         self.asa_id.value = UInt64(0)  # app no longer holds the ASA
 
+    # ── recover_stray_asa ───────────────────────────────────────────────────────
+    # RECOVERY HATCH for the double-opt-in edge case.
+    #
+    # Because app_opt_in_asa can run more than once before setup writes asa_id (both
+    # gate only on asa_id == 0), a creator can opt the app into asset A, then into
+    # asset B, then setup with B. The app then holds TWO asset opt-ins but asa_id
+    # only tracks B. The normal close-out (admin_sweep_asa / creator_reclaim_asa)
+    # only closes asa_id, leaving the stray asset A held forever — which blocks the
+    # ALGO close (an account holding any ASA cannot be closed), wedging the app.
+    #
+    # This method closes out ONE stray asset (any asset that is NOT the live asa_id)
+    # back to the CREATOR, freeing the app to eventually close. Constraints that
+    # keep it safe:
+    #   • asset != asa_id — it can NEVER touch the live campaign token (that has its
+    #     own proper close-out path and is owed to backers), so this cannot be used
+    #     to rug the pool.
+    #   • proceeds always go to the CREATOR (who opted the app into the stray asset),
+    #     never to the caller — so an admin caller cannot profit.
+    #   • callable by admin OR creator, so a stuck app can be cleared even if the
+    #     creator has vanished.
+    # If the app isn't actually opted into `asset`, the inner close-out reverts and
+    # nothing changes (safe no-op on a bad argument).
+    @abimethod
+    def recover_stray_asa(self, asset: Asset) -> None:
+        assert Global.group_size == 1
+        assert self._is_admin() or self._is_creator()
+        # Never allow closing the live campaign token through this path.
+        assert asset.id != self.asa_id.value
+        assert asset.id != 0
+        itxn.AssetTransfer(
+            xfer_asset=asset,
+            asset_receiver=self.creator.value,
+            asset_amount=0,
+            asset_close_to=self.creator.value,  # return the stray holding to creator
+            fee=0,
+        ).submit()
+
     # ── admin_sweep_asa ─────────────────────────────────────────────────────────
     # Decoupled ASA close-out to the ADMIN, kept separate from the ALGO close.
     #   SUCCESS (success_grace_expired): sweeps tokens of investors who never

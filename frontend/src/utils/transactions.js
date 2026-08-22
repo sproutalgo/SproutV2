@@ -528,6 +528,63 @@ export async function buildAdminSweepAsaTxn({ sender, appId, asaId }) {
 }
 
 /**
+ * Recover a STRAY asset opt-in — the fix for the double-opt-in wedge.
+ *
+ * app_opt_in_asa and setup both gate only on asa_id == 0, and app_opt_in_asa
+ * doesn't set asa_id — only setup does. So a creator can opt the app into asset A,
+ * then asset B, then setup with B: the app ends up holding TWO asset opt-ins while
+ * asa_id only tracks B. The normal close-outs (admin_sweep_asa / creator_reclaim_
+ * asa) only close asa_id, leaving stray asset A held forever — and an account
+ * holding any ASA can't be closed, so admin_claim's ALGO close fails permanently
+ * and the app is wedged.
+ *
+ * This closes ONE stray asset (any asset that is NOT the live asa_id) back to the
+ * CREATOR, freeing the app to close. Callable by admin OR creator. The contract
+ * guards: asset != asa_id (can't touch the live token), proceeds hardcoded to the
+ * creator (caller can't profit). If the app isn't opted into strayAsaId the inner
+ * close reverts safely (no-op).
+ *
+ * `strayAsaId` — the asset id the app is opted into that is NOT the campaign token.
+ * Find it by reading the app account's assets on-chain and picking the id that
+ * isn't the campaign's asa_id (see findStrayAsaIds below).
+ *
+ * Fee 2000 covers the inner close-out (fee:0 → caller-pooled). LONE app call.
+ */
+export async function buildRecoverStrayAsaTxn({ sender, appId, strayAsaId }) {
+  const sp = await getSp(2000)
+  const m  = method('recover_stray_asa')
+  return algosdk.makeApplicationNoOpTxnFromObject({
+    sender,
+    suggestedParams: sp,
+    appIndex: Number(appId),
+    appArgs: buildAppArgs(m, [BigInt(strayAsaId)]),
+    foreignAssets: [Number(strayAsaId)],
+  })
+}
+
+/**
+ * Find stray asset ids held by an app account — assets the app is opted into that
+ * are NOT the campaign token (asa_id). Usually returns [] (healthy app) or a
+ * single id (wedged app). Feed each into buildRecoverStrayAsaTxn to unwedge.
+ *
+ * `campaignAsaId` — the app's global-state asa_id (0 if setup hasn't recorded one).
+ */
+export async function findStrayAsaIds({ appId, campaignAsaId }) {
+  const appAddress = algosdk.getApplicationAddress(Number(appId))
+  let acct = null
+  try {
+    acct = await algodClient.accountInformation(appAddress).do()
+  } catch {
+    return []
+  }
+  const held = (acct?.assets ?? acct?.['assets'] ?? [])
+    .map(a => Number(a['asset-id'] ?? a.assetId ?? a['asset-index'] ?? -1))
+    .filter(id => id > 0)
+  const campaign = Number(campaignAsaId ?? 0)
+  return held.filter(id => id !== campaign)
+}
+
+/**
  * Admin claim: GRACE-ONLY ALGO close that retires a stale contract. Requires
  * asa_id == 0 (run admin_sweep_asa or creator_reclaim_asa first). LONE app call.
  * Callable by EITHER the admin or the creator; the residual always closes to the
