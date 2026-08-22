@@ -1,0 +1,6 @@
+# Regenerable puyapy build artifacts — compile.py copies these to the stable
+# short names (approval.teal / clear.teal) that the frontend actually imports.
+Crowdfund.approval.teal
+Crowdfund.clear.teal
+Crowdfund.approval.puya.map
+Crowdfund.clear.puya.map
