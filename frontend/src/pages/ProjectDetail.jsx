@@ -11,6 +11,7 @@ import {
   buildOptInTxn, buildAsaOptInTxn, buildContributeGroup,
   buildFinalizeTxn, buildCreatorClaimTxn, buildRefundTxn,
   buildDeleteAppTxn, buildClearStateTxn,
+  buildRecoverStrayAsaTxn, findStrayAsaIds,
 } from '../utils/transactions'
 import { useToast } from '../context/ToastContext'
 
@@ -176,6 +177,7 @@ export default function ProjectDetail() {
   const [showContract, setShowContract]   = useState(false)
   const [escrowBal, setEscrowBal]         = useState(null)   // microALGO, null = not yet fetched
   const [escrowErr, setEscrowErr]         = useState(false)
+  const [strayAsaIds, setStrayAsaIds]     = useState([])     // stray asset opt-ins wedging the app
 
   const loadData = useCallback(async () => {
     try {
@@ -195,6 +197,12 @@ export default function ProjectDetail() {
               setAsaUnitName(p['unit-name'] ?? p.unitName ?? '')
             } catch { setAsaDecimals(0); setAsaUnitName('') }
           }
+          // Detect stray asset opt-ins (the double-opt-in wedge): assets the app
+          // holds that are NOT the campaign token. Non-empty => app is wedged.
+          try {
+            const strays = await findStrayAsaIds({ appId, campaignAsaId: asaId })
+            setStrayAsaIds(strays)
+          } catch { setStrayAsaIds([]) }
         }
       } catch { setAppDeleted(true); setGs({}) }
 
@@ -368,6 +376,11 @@ export default function ProjectDetail() {
   // tokens). Gated on grace by the contract, which surfaces "grace not expired".
   const isCreatorViewer  = !!activeAddress && activeAddress === safeGs.creator
   const canCreatorClose  = isCreatorViewer && !adminClaimed && asaIdOnChain === 0 && (succeeded || failed)
+  // Stray-asset recovery: only when the app actually holds a stray opt-in (the
+  // double-opt-in wedge), visible to admin or creator (matches the contract's
+  // recover_stray_asa permissions). Appears on wedged apps only — nothing shows
+  // for healthy campaigns.
+  const canRecoverStray  = (isSettler || isCreatorViewer) && !adminClaimed && strayAsaIds.length > 0
   const funded = isSuccess || isDistributed
 
   // Admin settlement panel inline components
@@ -791,6 +804,40 @@ export default function ProjectDetail() {
                 <p className="field-hint" style={{ marginTop: 11, textAlign: 'center' }}>
                   Refunded in full if the goal isn't met by the deadline.
                 </p>
+              </div>
+            )}
+
+            {/* Stray-asset recovery — appears ONLY when the app holds a stray
+                asset opt-in (the double-opt-in wedge). Blocks the ALGO close until
+                cleared. Visible to admin or creator. */}
+            {canRecoverStray && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: 'var(--danger)' }}>
+                  ⚠ Stray asset blocking closure
+                </div>
+                <div className="field-hint" style={{ marginBottom: 10 }}>
+                  This contract is opted into {strayAsaIds.length === 1 ? 'an asset' : `${strayAsaIds.length} assets`} that {strayAsaIds.length === 1 ? 'is' : 'are'} not the campaign token — leftover from an interrupted setup. It must be returned to the creator before the contract can be closed. This is safe: it cannot touch the campaign token, and proceeds always go to the creator.
+                </div>
+                {strayAsaIds.map(sid => (
+                  <div key={sid} style={{ marginBottom: 8 }}>
+                    <button
+                      className="btn btn-soft btn-block"
+                      disabled={actioning}
+                      onClick={async () => {
+                        setActioning(true)
+                        try {
+                          await signAndSendTxns(await buildRecoverStrayAsaTxn({ sender: activeAddress, appId, strayAsaId: sid }))
+                          addToast(`Recovered stray asset ${sid} to the creator.`, 'success')
+                          loadData()
+                        } catch (e) {
+                          addToast(e?.message || 'Recovery failed', 'error')
+                        } finally { setActioning(false) }
+                      }}
+                    >
+                      {actioning ? 'Processing…' : `Recover stray asset ${sid}`}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 
