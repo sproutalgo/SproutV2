@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
@@ -89,7 +88,10 @@ export default function DonationSetup() {
       await registerProject({
         address: activeAddress,
         appId,
-        meta: { ...meta, isDonation: true },
+        // isHidden: false flips the campaign public now that the escrow is funded.
+        // (It was registered hidden at deploy so it stayed off Explore while
+        // unfunded but still showed in the creator's My garden.)
+        meta: { ...meta, isDonation: true, isHidden: false },
       })
 
       setStatus('done')

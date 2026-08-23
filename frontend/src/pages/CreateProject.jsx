@@ -226,18 +226,32 @@ export default function CreateProject() {
         milestoneTitle:       milestoneTitle || null,
         milestoneDescription: milestoneDesc  || null,
         plannedMilestones:    validPlanned.length > 0 ? validPlanned : null,
+        // Contribution campaigns register at deploy but stay hidden from Explore
+        // until their escrow is funded (DonationSetup flips this to false after the
+        // deposit). Reward campaigns are visible immediately. This keeps unfunded
+        // donation campaigns visible in the creator's My garden (so "do this later"
+        // is safe) while keeping them off the public grid.
+        isHidden:             isDonation,
       }
 
+      // Register the campaign row at DEPLOY for BOTH types (previously donation
+      // campaigns registered only after funding, so clicking "do this later" left
+      // the deployed contract with no DB row — invisible in My garden and
+      // unreachable, stranding the listing fee). Registering here means the
+      // campaign always appears in My garden in a "needs funding" state and can be
+      // funded later. Donation campaigns are still hidden from Explore until
+      // funded (see the is_funded / on-chain-balance gating on the public grid).
+      await registerProject({ address: activeAddress, appId: newAppId, meta: registrationMeta })
+
       if (isDonation) {
-        // Donation campaigns must fund the escrow before being registered and
-        // made visible. Hand off to the intermediate setup page which sends the
-        // 0.4 ALGO payment and only then calls registerProject with isDonation: true.
+        // Escrow still needs its minimum-balance deposit before going live. Hand
+        // off to the funding page — but the row now already exists, so "do this
+        // later" is safe: the campaign persists and can be funded from My garden.
         addToast(`Deployed! App ID: ${newAppId} — one more step to go live.`, 'success', 5000)
         navigate('/donate-setup', { state: { appId: newAppId, meta: registrationMeta } })
         return
       }
 
-      await registerProject({ address: activeAddress, appId: newAppId, meta: registrationMeta })
       addToast(`Deployed! App ID: ${newAppId}`, 'success')
       addToast('Go to My garden → Set up contract to fund the token pool.', 'info', 8000)
       navigate('/my-projects')

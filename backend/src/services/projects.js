@@ -152,6 +152,7 @@ export async function createProject({
   milestoneDescription,
   plannedMilestones,
   seriesGoalMicro,
+  isHidden,
 }) {
   if (!name || String(name).trim().length === 0) throw new Error('name is required')
   if (String(name).length > 60)          throw new Error('name exceeds 60 characters')
@@ -197,7 +198,11 @@ export async function createProject({
 
   const { data, error } = await supabase
     .from('projects')
-    .insert({
+    // Upsert (not insert) so registration is idempotent: donation campaigns now
+    // register at deploy AND again after funding, and a creator may re-run
+    // registration. Conflicting on app_id updates the existing row instead of
+    // failing on a duplicate key.
+    .upsert({
       app_id:               Number(appId),
       creator_address:      creatorAddress,
       name:                 String(name).slice(0, 60),
@@ -212,6 +217,7 @@ export async function createProject({
       rate_per_algo:        Number(ratePerAlgo),
       algo_per_bundle:      algoPerBundle != null ? Number(algoPerBundle) : 1,
       is_donation:          Boolean(isDonation),
+      is_hidden:            Boolean(isHidden),
       highlights:           Array.isArray(highlights)
                               ? highlights.slice(0, 3).map(h => String(h || '').slice(0, 500))
                               : null,
@@ -226,7 +232,7 @@ export async function createProject({
                                   description: String(m?.description || '').slice(0, 500),
                                 }))
                               : null,
-    })
+    }, { onConflict: 'app_id' })
     .select()
     .single()
 

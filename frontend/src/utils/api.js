@@ -110,6 +110,7 @@ export async function registerProject({ address, appId, meta }) {
       milestoneTitle:       meta.milestoneTitle,
       milestoneDescription: meta.milestoneDescription,
       plannedMilestones:    meta.plannedMilestones,
+      isHidden:             meta.isHidden,
     },
   })
 }

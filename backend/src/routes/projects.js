@@ -105,7 +105,7 @@ router.post('/', async (req, res) => {
       websiteUrl, deckUrl, imageUrl, goalMicro, ratePerAlgo, algoPerBundle,
       highlights,
       isDonation, seriesId, milestoneNumber, milestoneTitle,
-      milestoneDescription, plannedMilestones, seriesGoalMicro,
+      milestoneDescription, plannedMilestones, seriesGoalMicro, isHidden,
     } = req.body
 
     const appId = parseAppId(rawAppId)
@@ -138,7 +138,7 @@ router.post('/', async (req, res) => {
       websiteUrl, deckUrl, imageUrl, tokenName,
       goalMicro, ratePerAlgo, algoPerBundle, highlights,
       isDonation, seriesId, milestoneNumber, milestoneTitle,
-      milestoneDescription, plannedMilestones, seriesGoalMicro,
+      milestoneDescription, plannedMilestones, seriesGoalMicro, isHidden,
     })
 
     // Populate on_chain_* cache immediately so the explore and My Projects
