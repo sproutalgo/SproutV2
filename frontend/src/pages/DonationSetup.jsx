@@ -16,6 +16,26 @@ import { Icon, Cover, categoryHue } from '../components/UI'
 // skips the payment entirely if the escrow is already funded — no double-send.
 const FUND_BUFFER = 10_000 // 0.01 ALGO headroom above min-balance
 
+// Reads the escrow's live balance + min-balance from algod and returns the exact
+// deposit shortfall (in microALGO) needed to activate the campaign. Shared by the
+// page-load display computation AND the click-time funding logic so the two can
+// never drift apart. Returns 0 if the escrow is already funded. Fails safe: if the
+// account read throws (e.g. account doesn't exist yet), treats balance as 0 and
+// funds from the floor.
+async function computeEscrowShortfall(appAddress) {
+  let currentBalance = 0
+  let currentMinBalance = 100_000 // sensible floor if the account read fails
+  try {
+    const acct = await algodClient.accountInformation(appAddress).do()
+    currentBalance = Number(acct?.amount ?? 0)
+    currentMinBalance = Number(acct?.['min-balance'] ?? acct?.minBalance ?? currentMinBalance)
+  } catch {
+    currentBalance = 0
+  }
+  const targetBalance = currentMinBalance + FUND_BUFFER
+  return Math.max(0, targetBalance - currentBalance)
+}
+
 export default function DonationSetup() {
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -55,6 +75,22 @@ export default function DonationSetup() {
     return () => { cancelled = true }
   }, [appId, meta, navigate])
 
+  // Compute the exact deposit on PAGE LOAD (not only when the creator clicks), so
+  // the "Deposit required" figure is accurate and stable from the start instead of
+  // showing a placeholder that snaps to a different value on click. Uses the same
+  // shared helper as the funding logic. appAddress derives from appId alone, so
+  // this doesn't need to wait for meta to load.
+  useEffect(() => {
+    if (!appId) return
+    let cancelled = false
+    let addr = ''
+    try { addr = algosdk.getApplicationAddress(Number(appId)).toString() } catch { return }
+    computeEscrowShortfall(addr)
+      .then(shortfall => { if (!cancelled) setDepositAlgo(shortfall / 1_000_000) })
+      .catch(() => { /* leave as null → display shows "Calculating…" */ })
+    return () => { cancelled = true }
+  }, [appId])
+
   if (!appId) return null
   if (!meta) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading campaign…</div>
 
@@ -75,22 +111,11 @@ export default function DonationSetup() {
     setErrMsg('')
     try {
       // Step 1: top up the escrow to its minimum balance (idempotent).
-      // Read the escrow's current balance and min-balance; fund only the shortfall.
-      // If it's already funded (e.g. this is a retry after registration failed),
-      // the shortfall is 0 and we skip the payment entirely — no wasted ALGO.
-      let currentBalance = 0
-      let currentMinBalance = 100_000 // sensible floor if the account read fails
-      try {
-        const acct = await algodClient.accountInformation(appAddress).do()
-        currentBalance = Number(acct?.amount ?? 0)
-        currentMinBalance = Number(acct?.['min-balance'] ?? acct?.minBalance ?? currentMinBalance)
-      } catch {
-        // Account may not exist yet — treat as empty, fund from the floor.
-        currentBalance = 0
-      }
-
-      const targetBalance = currentMinBalance + FUND_BUFFER
-      const shortfall = Math.max(0, targetBalance - currentBalance)
+      // Recompute the shortfall fresh here (not just the page-load value) so a
+      // retry reflects any funding that already landed — if the escrow is now
+      // funded, shortfall is 0 and we skip the payment entirely. Same shared
+      // helper as the page-load display, so the numbers can't disagree.
+      const shortfall = await computeEscrowShortfall(appAddress)
       setDepositAlgo(shortfall / 1_000_000)
 
       if (shortfall > 0) {
@@ -237,11 +262,17 @@ export default function DonationSetup() {
               <>
                 <div>
                   <div style={{ fontSize: 13, color: 'var(--text-faint)', marginBottom: 4 }}>Deposit required</div>
-                  <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                    {depositAlgo === null ? '~0.1' : depositAlgo === 0 ? '0' : depositAlgo.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')} <span style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500 }}>ALGO</span>
-                  </div>
+                  {depositAlgo === null ? (
+                    <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '-0.01em' }}>
+                      Calculating…
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                      {depositAlgo === 0 ? '0' : depositAlgo.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')} <span style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 500 }}>ALGO</span>
+                    </div>
+                  )}
                   <div style={{ fontSize: 12.5, color: 'var(--text-faint)', marginTop: 4 }}>
-                    {depositAlgo === 0 ? 'Escrow already funded — no deposit needed' : '+ ~0.001 ALGO transaction fee'}
+                    {depositAlgo === null ? 'Reading escrow balance…' : depositAlgo === 0 ? 'Escrow already funded — no deposit needed' : '+ ~0.001 ALGO transaction fee'}
                   </div>
                 </div>
 
