@@ -523,11 +523,17 @@ class Crowdfund(ARC4Contract):
         assert Global.group_size == 1
         assert self._is_admin()
         assert asa_sweep_ok, "grace not expired"
+        # Swept tokens return to the CREATOR (not the admin): the creator provided
+        # the token pool, so unclaimed/leftover tokens are theirs. This is symmetric
+        # with creator_reclaim_asa (failure path) and with admin_claim's ALGO close,
+        # which also returns residual value to the creator. The admin's only take is
+        # the 4% ALGO success fee (handled separately in admin_fee_claim/admin_claim);
+        # the ASA sweep has no fee dependency.
         itxn.AssetTransfer(
             xfer_asset=asa_id,
-            asset_receiver=self.admin.value,
+            asset_receiver=self.creator.value,
             asset_amount=0,
-            asset_close_to=self.admin.value,  # closes the app's full ASA balance
+            asset_close_to=self.creator.value,  # closes the app's full ASA balance to the creator
             fee=0,
         ).submit()
         self.asa_id.value = UInt64(0)  # app no longer holds the ASA
