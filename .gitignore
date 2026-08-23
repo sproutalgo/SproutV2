@@ -5,3 +5,11 @@
 **/.env.*
 node_modules/
 **/node_modules/
+
+# Build output
+frontend/dist
+backend/dist
+
+# Python artifacts
+*.pyc
+**/__pycache__/

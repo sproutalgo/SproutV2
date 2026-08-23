@@ -41,7 +41,7 @@ const SECTIONS = [
       },
       {
         q: 'What is the 6-month grace period?',
-        a: 'After a Reward campaign ends (either by reaching its goal or expiring), backers have 6 months to claim their token. This window exists because the contract cannot fully settle until all positions are resolved — the grace period gives every backer ample time to claim while ensuring the campaign can eventually close. After 6 months, in order to complete settlement, unclaimed tokens and ALGO will be permanently transferred to the platform — you will not be able to recover them after this point. Claim as soon as possible after a campaign ends.',
+        a: 'After a Reward campaign ends (either by reaching its goal or expiring), backers have 6 months to claim their token. This window exists because the contract cannot fully settle until all positions are resolved — the grace period gives every backer ample time to claim while ensuring the campaign can eventually close. After 6 months, in order to complete settlement, any unclaimed tokens and residual ALGO are returned to the campaign creator (who provided the token pool), not to the platform — and once that settlement close happens, a backer who never claimed can no longer recover their token. The platform never receives unclaimed tokens or leftover ALGO; its only fee is the 4% success fee on funded campaigns. Claim as soon as possible after a campaign ends.',
       },
       {
         q: 'Can I withdraw my contribution before the deadline?',
@@ -58,7 +58,7 @@ const SECTIONS = [
     items: [
       {
         q: 'What does it cost to launch a campaign?',
-        a: 'There is a 0.4 ALGO minimum balance payment made during setup to fund the contract account — this covers Algorand network requirements. Additionally, you pay a non-refundable listing fee at deployment, calculated as 0.001% of your funding goal per day of campaign duration, with a minimum of 10 ALGO. For example, a 50,000 ALGO campaign listed for 30 days costs 15 ALGO; smaller or shorter campaigns pay the 10 ALGO minimum instead. If the campaign fails, you lose only the listing fee — no additional penalty is imposed and backers receive full refunds. This fee structure is the same for both campaign types.',
+        a: 'There is a small contract-account minimum-balance deposit made during setup to satisfy Algorand network requirements — typically around 0.1–0.3 ALGO depending on the campaign. The exact amount is computed at setup and only tops the account up to what it needs; it is not a fee and is returned to you when the contract is finally closed. Additionally, you pay a non-refundable listing fee at deployment, calculated as 0.001% of your funding goal per day of campaign duration, with a minimum of 10 ALGO. For example, a 50,000 ALGO campaign listed for 30 days costs 15 ALGO; smaller or shorter campaigns pay the 10 ALGO minimum instead. If the campaign fails, you lose only the listing fee — the minimum-balance deposit is still recoverable at close, no additional penalty is imposed, and backers receive full refunds. This fee structure is the same for both campaign types.',
       },
       {
         q: 'When do I receive my ALGO?',

@@ -199,7 +199,7 @@ export default function Terms() {
           loses only the listing fee paid at deployment — no additional penalty is imposed.
         </P>
         <P>
-          <strong>Minimum balance:</strong> A 0.4 ALGO payment is required during campaign
+          <strong>Minimum balance:</strong> A 0.1-.3 ALGO payment is required during campaign
           setup to fund the smart contract account's Algorand network minimum balance
           requirement.
         </P>

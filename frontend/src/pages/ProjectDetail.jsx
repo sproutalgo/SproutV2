@@ -848,7 +848,7 @@ export default function ProjectDetail() {
                 {canAdminSweepAsa && (
                   <>
                     <div className="field-hint" style={{ marginBottom: 10 }}>
-                      Step 1: Close the ASA holding to admin. You must be opted into the project token first.
+                      Step 1: Close the ASA holding to the creator. The creator must be opted into the project token first, or this reverts.
                     </div>
                     <AdminSweepAsaButton appId={appId} asaIdVal={asaIdOnChain} actioning={actioning} setActioning={setActioning} loadData={loadData} addToast={addToast} signAndSendTxns={signAndSendTxns} />
                   </>
