@@ -207,6 +207,44 @@ export default function MyProjects() {
     if (!asaId || asaId <= 0) return addToast('Enter a valid ASA ID first', 'error')
     if (asaError) return addToast(asaError, 'error')
     if (!asaInfo) return addToast('Wait for ASA info to load, or re-enter the ASA ID', 'error')
+
+    // ── Pre-flight balance check ─────────────────────────────────────────────
+    // Tell the creator up front, before any signing, whether they're short on
+    // ALGO or on the project token — the two are entirely different resources and
+    // a post-failure chain error can't always be attributed cleanly. This catches
+    // the common cases early with an exact, unambiguous message.
+    try {
+      const goalMicroCheck = algoToMicro(parseFloat(setupForm.goalAlgo))
+      const decimalsCheck  = asaInfo.decimals ?? 0
+      const wholeTokens    = Math.floor((goalMicroCheck * tokensPerBundle) / (algoPerBundle * 1_000_000))
+      const tokensNeeded   = wholeTokens * Math.pow(10, decimalsCheck) // base units
+
+      const acct = await algodClient.accountInformation(activeAddress).do()
+      const algoBal = Number(acct?.amount ?? 0)
+      const held    = (acct?.assets ?? acct?.['assets'] ?? [])
+        .find(a => Number(a['asset-id'] ?? a.assetId) === asaId)
+      const tokenBal = Number(held?.amount ?? 0)
+
+      // Rough ALGO need: app min-balance deposit (~0.2 ALGO after ASA opt-in) plus
+      // a few txn fees. We don't need to be exact — just catch a clearly-empty wallet.
+      const ALGO_NEEDED_ESTIMATE = 300_000 // ~0.3 ALGO headroom for deposit + fees
+      const shortOnAlgo   = algoBal < ALGO_NEEDED_ESTIMATE
+      const shortOnTokens = tokenBal < tokensNeeded
+
+      if (shortOnAlgo && shortOnTokens) {
+        return addToast(`You\u2019re short on both. Need ~0.3 ALGO (have ${(algoBal/1e6).toFixed(3)}) and ${wholeTokens.toLocaleString()} ${asaInfo.symbol || 'tokens'} (have ${(tokenBal/Math.pow(10,decimalsCheck)).toLocaleString()}). Top up both and try again.`, 'error', 10000)
+      }
+      if (shortOnTokens) {
+        return addToast(`Not enough of your project token. This campaign needs ${wholeTokens.toLocaleString()} ${asaInfo.symbol || 'tokens'} for the reward pool, but your wallet holds ${(tokenBal/Math.pow(10,decimalsCheck)).toLocaleString()}. Your ALGO is fine \u2014 add more tokens and try again.`, 'error', 10000)
+      }
+      if (shortOnAlgo) {
+        return addToast(`Not enough ALGO. Setup needs roughly 0.3 ALGO for the contract\u2019s minimum-balance deposit and fees, but your wallet holds ${(algoBal/1e6).toFixed(3)}. Your token balance is fine \u2014 add ALGO and try again.`, 'error', 10000)
+      }
+    } catch {
+      // If the pre-check itself fails (network, parsing), don't block — fall
+      // through and let the on-chain attempt surface the real error.
+    }
+
     setSettingUp(true)
     try {
       const appAddress = algosdk.getApplicationAddress(appId)
@@ -247,8 +285,21 @@ export default function MyProjects() {
     } catch (e) {
       console.error(e)
       const msg = e?.message || ''
-      if (msg.includes('underflow') || msg.includes('overspend') || msg.includes('below min')) {
-        addToast('Insufficient token balance. You need at least Goal × Rate tokens in your wallet to fund the token pool. Check your wallet balance and try again.', 'error', 8000)
+      // Distinguish the two "not enough" causes so the creator knows which
+      // resource is short:
+      //   • "below min" / "overspend" → not enough ALGO (min-balance / fees / deposit)
+      //   • "underflow" on the asset transfer → not enough of the PROJECT TOKEN
+      // These are different wallets-worth of resource; conflating them (the old
+      // message always said "token balance") sent creators chasing the wrong thing.
+      const isAlgoShortfall  = msg.includes('below min') || msg.includes('overspend')
+      const isTokenShortfall = msg.includes('underflow') || msg.includes('asset') || msg.includes('AssetAmount')
+      if (isAlgoShortfall && !isTokenShortfall) {
+        addToast('Not enough ALGO. Your wallet needs enough ALGO to cover the contract\u2019s minimum-balance deposit plus transaction fees. Add ALGO and try again. (Your token balance is fine \u2014 this is about ALGO.)', 'error', 9000)
+      } else if (isTokenShortfall && !isAlgoShortfall) {
+        addToast('Not enough of your project token. You need at least Goal \u00d7 Rate tokens in your wallet to fund the reward pool. Add tokens and try again. (Your ALGO balance is fine \u2014 this is about the token.)', 'error', 9000)
+      } else if (isAlgoShortfall || isTokenShortfall) {
+        // Ambiguous — name both so the creator can check the right one.
+        addToast('Setup couldn\u2019t fund the token pool. This is usually one of two things: (1) not enough ALGO for the minimum-balance deposit and fees, or (2) not enough of your project token (you need Goal \u00d7 Rate tokens). Check both balances and try again.', 'error', 10000)
       } else {
         addToast(msg || 'Setup failed', 'error')
       }
@@ -483,7 +534,7 @@ export default function MyProjects() {
                       Success fee (4%) is deducted from your payout when you claim. Listing fee was paid at deployment.
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                      Note: 0.4 ALGO is sent to the contract account to cover Algorand minimum balance requirements.
+                      Note: a small ALGO deposit (typically ~0.2 ALGO) is sent to the contract account to cover Algorand minimum balance requirements. Only the exact shortfall is sent, and it isn\u2019t re-sent on retry.
                     </div>
                   </div>
                 )}
