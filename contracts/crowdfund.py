@@ -73,7 +73,7 @@ from algopy.arc4 import abimethod
 
 # ── Constants (module-level compile-time constants must be plain ints) ────────
 #GRACE_PERIOD_ROUNDS = 5_580_866   # ~6 months at 2.8 s/block  (MAINNET value)
-GRACE_PERIOD_ROUNDS = 10           # TESTNET: compressed for fast dry-run
+GRACE_PERIOD_ROUNDS = 100           # TESTNET: compressed for fast dry-run
 #ROUNDS_PER_DAY = 30_857           # 86400 / 2.8 rounded  (MAINNET value)
 ROUNDS_PER_DAY = 10               # TESTNET: compressed for fast dry-run
 MIN_DAYS = 1

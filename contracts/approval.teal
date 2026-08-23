@@ -2146,7 +2146,7 @@ _success_grace_expired:
     bytec_2 // "funded_round"
     app_global_get_ex
     assert // check self.funded_round exists
-    pushint 10
+    pushint 100
     +
     >
     // crowdfund.py:202-203
@@ -2185,7 +2185,7 @@ _failure_grace_expired:
     bytec 10 // "deadline"
     app_global_get_ex
     assert // check self.deadline exists
-    pushint 10
+    pushint 100
     +
     >
     retsub
