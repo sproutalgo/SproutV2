@@ -416,8 +416,42 @@ export default function MyProjects() {
                 <div className="mp-actions">
                   {needsSetup && !p.meta?.is_donation
                     ? <button className="btn btn-primary btn-sm" onClick={() => openSetup(p)}>Set up contract</button>
-                    : needsSetup && p.meta?.is_donation
-                    ? <span className="faint" style={{ fontSize: 12 }}>Contribution — no setup needed</span>
+                    : p.meta?.is_donation && p.meta?.is_hidden
+                    ? (
+                      // Unfunded contribution campaign: hidden until its escrow is
+                      // funded. Route to the funding page, reconstructing the meta
+                      // from the DB row (camelCase keys DonationSetup/registerProject
+                      // expect) so it works even when reached from My garden rather
+                      // than straight from deploy.
+                      <Link
+                        className="btn btn-primary btn-sm"
+                        to="/donate-setup"
+                        state={{
+                          appId: p.id,
+                          meta: {
+                            name: p.meta.name,
+                            tagline: p.meta.tagline,
+                            description: p.meta.description,
+                            category: p.meta.category,
+                            websiteUrl: p.meta.website_url,
+                            tokenName: p.meta.token_name,
+                            goalMicro: p.meta.goal_micro,
+                            ratePerAlgo: p.meta.rate_per_algo,
+                            algoPerBundle: p.meta.algo_per_bundle,
+                            highlights: p.meta.highlights,
+                            isDonation: true,
+                            seriesId: p.meta.series_id,
+                            seriesGoalMicro: p.meta.series_goal_micro,
+                            milestoneNumber: p.meta.milestone_number,
+                            milestoneTitle: p.meta.milestone_title,
+                            milestoneDescription: p.meta.milestone_description,
+                            plannedMilestones: p.meta.planned_milestones,
+                          },
+                        }}
+                      >
+                        Fund contract
+                      </Link>
+                    )
                     : <Link to={`/project/${p.id}`} className="btn btn-ghost btn-sm">View campaign</Link>
                   }
                   {p.meta?.milestone_title && !p.meta?.milestone_completed_at && (status === 'distributed' || status === 'funded') && (

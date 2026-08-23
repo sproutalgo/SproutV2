@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import { algodClient, signAndSend } from '../utils/algorand'
-import { registerProject } from '../utils/api'
+import { registerProject, fetchProjectMeta } from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { Icon, Cover, categoryHue } from '../components/UI'
 
@@ -22,18 +22,41 @@ export default function DonationSetup() {
   const { activeAddress, signTransactions } = useWallet()
   const { addToast } = useToast()
 
-  const { appId, meta } = location.state ?? {}
+  const navState = location.state ?? {}
+  const appId = navState.appId
 
+  const [meta, setMeta]       = useState(navState.meta ?? null)
   const [status, setStatus]   = useState('idle') // idle | funding | registering | done | error
   const [errMsg, setErrMsg]   = useState('')
   const [depositAlgo, setDepositAlgo] = useState(null) // computed shortfall, in ALGO
 
-  // Guard: if someone lands here without state (e.g. direct URL), redirect home.
+  // Recover gracefully: if we arrived with an appId but no meta (e.g. navigated
+  // from My garden without full state, or a soft refresh), fetch the campaign row
+  // and rebuild meta instead of bouncing home. Only bail when there's no appId at
+  // all (nothing to recover from).
   useEffect(() => {
-    if (!appId || !meta) navigate('/', { replace: true })
+    if (!appId) { navigate('/', { replace: true }); return }
+    if (meta) return
+    let cancelled = false
+    fetchProjectMeta(appId)
+      .then(row => {
+        if (cancelled || !row) return
+        setMeta({
+          name: row.name, tagline: row.tagline, description: row.description,
+          category: row.category, websiteUrl: row.website_url, tokenName: row.token_name,
+          goalMicro: row.goal_micro, ratePerAlgo: row.rate_per_algo, algoPerBundle: row.algo_per_bundle,
+          highlights: row.highlights, isDonation: true,
+          seriesId: row.series_id, seriesGoalMicro: row.series_goal_micro,
+          milestoneNumber: row.milestone_number, milestoneTitle: row.milestone_title,
+          milestoneDescription: row.milestone_description, plannedMilestones: row.planned_milestones,
+        })
+      })
+      .catch(() => { if (!cancelled) navigate('/', { replace: true }) })
+    return () => { cancelled = true }
   }, [appId, meta, navigate])
 
-  if (!appId || !meta) return null
+  if (!appId) return null
+  if (!meta) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading campaign…</div>
 
   const appAddress = (() => {
     try { return algosdk.getApplicationAddress(Number(appId)).toString() } catch { return '' }
