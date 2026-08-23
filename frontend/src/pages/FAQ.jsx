@@ -41,7 +41,7 @@ const SECTIONS = [
       },
       {
         q: 'What is the 6-month grace period?',
-        a: 'After a Reward campaign ends (either by reaching its goal or expiring), backers have 6 months to claim their token. This window exists because the contract cannot fully settle until all positions are resolved — the grace period gives every backer ample time to claim while ensuring the campaign can eventually close. After 6 months, in order to complete settlement, any unclaimed tokens and residual ALGO are returned to the campaign creator (who provided the token pool), not to the platform — and once that settlement close happens, a backer who never claimed can no longer recover their token. The platform never receives unclaimed tokens or leftover ALGO; its only fee is the 4% success fee on funded campaigns. Claim as soon as possible after a campaign ends.',
+        a: 'After a Reward campaign ends (either by reaching its goal or expiring), backers have 6 months to claim their token. This window exists because the contract cannot fully settle until all positions are resolved — the grace period gives every backer ample time to claim while ensuring the campaign can eventually close. After 6 months, in order to complete settlement, any unclaimed tokens and residual ALGO are returned to the campaign creator (who provided the token pool). Once that settlement close happens, a backer who never claimed can no longer recover their token. Claim as soon as possible after a campaign ends.',
       },
       {
         q: 'Can I withdraw my contribution before the deadline?',
