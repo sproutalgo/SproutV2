@@ -10,6 +10,7 @@ import ProjectCard from '../components/ProjectCard'
 
 import APPROVAL_TEAL from '../../../contracts/approval.teal?raw'
 import CLEAR_TEAL    from '../../../contracts/clear.teal?raw'
+import arc56         from '../../../contracts/Crowdfund.arc56.json'
 
 const ALLOWED_WEBSITE_DOMAINS = ['x.com', 'twitter.com', 'github.com', 'linkedin.com']
 
@@ -126,6 +127,50 @@ export default function CreateProject() {
     if (!allOk) return addToast('Complete all required fields first', 'error')
     if (durError) return addToast(durError, 'error')
     if (!ADMIN_ADDRESS) return addToast('Set VITE_ADMIN_ADDRESS in your .env', 'error')
+
+    // ── Pre-flight ALGO balance check ────────────────────────────────────────
+    // Deploying costs the creator, in ALGO, at this step:
+    //   • Listing fee (spent, to admin): max(goal×days/100k, 10 ALGO)
+    //   • App-creation min-balance raise (locked in the creator's account while the
+    //     app exists, refunded on app deletion): 0.1 ALGO base + 0.0285/global uint
+    //     + 0.05/global byte-slice. For this contract's schema (13 uints, 2 slices)
+    //     that is 0.5705 ALGO. Computed from the ARC-56 schema below so it stays
+    //     correct if the contract's global state changes.
+    //   • Base account min-balance that must remain: 0.1 ALGO (+0.1 per ASA held)
+    //   • ~0.002 ALGO in transaction fees
+    // The creator needs all of this as SPENDABLE balance (i.e. current balance
+    // minus their existing min-balance must cover it).
+    try {
+      const goalMicro     = algoToMicro(goal)
+      const rawFee        = Math.floor((goalMicro * durDays) / 100_000)
+      const listingFeeMic = Math.max(rawFee, 10_000_000)
+
+      // App-creation MBR from the actual global schema (ARC-56).
+      const gSchema   = arc56?.state?.schema?.global ?? { ints: 13, bytes: 2 }
+      const appCreateMbr = 100_000 + Number(gSchema.ints) * 28_500 + Number(gSchema.bytes) * 50_000
+      const TXN_FEES  = 2_000
+      const needed    = listingFeeMic + appCreateMbr + TXN_FEES // must be spendable
+
+      const acct       = await algodClient.accountInformation(activeAddress).do()
+      const balance    = Number(acct?.amount ?? 0)
+      const minBalance = Number(acct?.['min-balance'] ?? acct?.minBalance ?? 0)
+      const spendable  = balance - minBalance
+
+      if (spendable < needed) {
+        const fmt = (m) => (m / 1e6).toLocaleString(undefined, { maximumFractionDigits: 3 })
+        return addToast(
+          `Not enough ALGO to deploy. This needs about ${fmt(needed)} ALGO spendable ` +
+          `(${fmt(listingFeeMic)} listing fee, ~${fmt(appCreateMbr)} refundable contract deposit, plus fees), ` +
+          `but your wallet has ${fmt(spendable)} ALGO available above its minimum balance. ` +
+          `Add ALGO and try again. (This is about ALGO, not your project token.)`,
+          'error', 11000
+        )
+      }
+    } catch {
+      // If the pre-check itself fails (network/parse), don't block — let the
+      // on-chain attempt surface the real error.
+    }
+
     setSubmitting(true)
     addToast('Compiling and deploying contract…', 'info', 0)
     try {
