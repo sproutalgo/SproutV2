@@ -522,8 +522,10 @@ class Crowdfund(ARC4Contract):
     #     the tokens still return to the creator — symmetric with the success side,
     #     and it prevents a non-reclaiming creator locking the ALGO close (which
     #     requires asa_id == 0).
-    # PROCEDURE: the admin must opt into asa_id BEFORE calling, or the inner
-    # asset_close_to reverts. On revert nothing is lost — opt in and retry.
+    # PROCEDURE: the tokens close to the CREATOR, so the CREATOR must be opted
+    # into asa_id BEFORE this is called, or the inner asset_close_to reverts. (The
+    # admin is only the caller, not the recipient, and does not need to opt in.)
+    # On revert nothing is lost — ensure the creator is opted in and retry.
     @abimethod
     def admin_sweep_asa(self) -> None:
         asa_id = self.asa_id.value
