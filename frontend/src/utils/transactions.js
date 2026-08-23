@@ -515,7 +515,7 @@ export async function buildCreatorReclaimAsaTxn({ sender, appId, asaId }) {
  * Fee: 2000 covers 1 inner ASA close (fee:0 → caller-pooled).
  * After this call asa_id == 0, satisfying admin_claim's precondition.
  */
-export async function buildAdminSweepAsaTxn({ sender, appId, asaId }) {
+export async function buildAdminSweepAsaTxn({ sender, appId, asaId, creatorAddress }) {
   const sp = await getSp(2000)
   const m  = method('admin_sweep_asa')
   return algosdk.makeApplicationNoOpTxnFromObject({
@@ -524,6 +524,10 @@ export async function buildAdminSweepAsaTxn({ sender, appId, asaId }) {
     appIndex: Number(appId),
     appArgs: buildAppArgs(m, []),
     foreignAssets: [Number(asaId)],
+    // The ASA now closes to the CREATOR (not the admin). When the caller is the
+    // admin, the creator is neither the sender nor the app account, so it must be
+    // declared as a foreign account or the inner AssetCloseTo fails "unavailable".
+    accounts: creatorAddress ? [creatorAddress] : undefined,
   })
 }
 
@@ -550,7 +554,7 @@ export async function buildAdminSweepAsaTxn({ sender, appId, asaId }) {
  *
  * Fee 2000 covers the inner close-out (fee:0 → caller-pooled). LONE app call.
  */
-export async function buildRecoverStrayAsaTxn({ sender, appId, strayAsaId }) {
+export async function buildRecoverStrayAsaTxn({ sender, appId, strayAsaId, creatorAddress }) {
   const sp = await getSp(2000)
   const m  = method('recover_stray_asa')
   return algosdk.makeApplicationNoOpTxnFromObject({
@@ -559,6 +563,9 @@ export async function buildRecoverStrayAsaTxn({ sender, appId, strayAsaId }) {
     appIndex: Number(appId),
     appArgs: buildAppArgs(m, [BigInt(strayAsaId)]),
     foreignAssets: [Number(strayAsaId)],
+    // Closes the stray asset to the CREATOR; when the caller is the admin the
+    // creator must be declared as a foreign account (see buildAdminSweepAsaTxn).
+    accounts: creatorAddress ? [creatorAddress] : undefined,
   })
 }
 

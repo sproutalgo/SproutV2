@@ -393,14 +393,14 @@ export default function ProjectDetail() {
           setActioning(true)
           try {
             const { buildAdminSweepAsaTxn } = await import('../utils/transactions')
-            await signAndSendTxns(await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId: asaIdVal }))
+            await signAndSendTxns(await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId: asaIdVal, creatorAddress: safeGs.creator }))
             addToast('ASA swept. Now run admin_claim to close ALGO.', 'success', 5000)
             loadData()
           } catch (e) { addToast(e?.message || 'ASA sweep failed', 'error') }
           finally { setActioning(false) }
         }}
       >
-        {actioning ? 'Processing…' : 'Sweep ASA to admin'}
+        {actioning ? 'Processing…' : 'Sweep ASA to creator'}
       </button>
     )
   }
@@ -826,7 +826,7 @@ export default function ProjectDetail() {
                       onClick={async () => {
                         setActioning(true)
                         try {
-                          await signAndSendTxns(await buildRecoverStrayAsaTxn({ sender: activeAddress, appId, strayAsaId: sid }))
+                          await signAndSendTxns(await buildRecoverStrayAsaTxn({ sender: activeAddress, appId, strayAsaId: sid, creatorAddress: safeGs.creator }))
                           addToast(`Recovered stray asset ${sid} to the creator.`, 'success')
                           loadData()
                         } catch (e) {

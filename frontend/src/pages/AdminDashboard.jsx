@@ -93,9 +93,9 @@ export default function AdminDashboard() {
 
       // Close in two steps if needed — contract will reject if grace not expired
       if (asaId > 0) {
-        addToast('Step 1: Sweeping ASA to admin…', 'info', 3000)
+        addToast('Step 1: Sweeping ASA to creator…', 'info', 3000)
         await signAndSend(signTransactions, encodeUnsignedTxns([
-          await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId })
+          await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId, creatorAddress })
         ]))
         addToast('ASA swept. Now closing ALGO…', 'info', 3000)
       }
@@ -164,9 +164,9 @@ export default function AdminDashboard() {
 
       // Two-step close — contract will reject if grace not expired
       if (asaId > 0) {
-        addToast('Step 1: Sweeping unclaimed tokens to admin…', 'info', 3000)
+        addToast('Step 1: Sweeping unclaimed tokens to creator…', 'info', 3000)
         await signAndSend(signTransactions, encodeUnsignedTxns([
-          await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId })
+          await buildAdminSweepAsaTxn({ sender: activeAddress, appId, asaId, creatorAddress })
         ]))
         addToast('ASA swept. Closing ALGO…', 'info', 3000)
       }
