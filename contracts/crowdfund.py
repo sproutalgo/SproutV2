@@ -1,11 +1,19 @@
-# Crowdfunding App (stateful, smart-contract account) — Puya / Algorand Python port.
+# Crowdfunding App (stateful, smart-contract account) — Puya / Algorand Python.
 #
-# This is a direct, logic-preserving port of the original PyTeal contract to
-# Algorand Python (Puya). Every assertion, guard, state transition, inner
-# transaction, and grace/overflow rule is reproduced exactly. Nothing in the
-# on-chain behavior has been changed — only the source language.
+# Originally a direct, logic-preserving port of the PyTeal contract to Algorand
+# Python (Puya). The initial port reproduced every assertion, guard, state
+# transition, inner transaction, and grace/overflow rule exactly. Since then the
+# contract has intentionally DIVERGED from the PyTeal original in two ways, noted
+# on the affected methods below:
+#   • Residual value (unclaimed tokens via admin_sweep_asa, and residual ALGO via
+#     admin_claim) now returns to the CREATOR, not the admin. The admin's only
+#     take is the 4% success fee. (Was: forfeited to the admin.)
+#   • A new recovery method, recover_stray_asa, has no PyTeal ancestor. It clears
+#     a stray ASA opt-in (the double-opt-in wedge) back to the creator so the app
+#     can eventually close.
+# Everything else remains a faithful reproduction of the original on-chain logic.
 #
-# Key design properties (unchanged):
+# Key design properties:
 #
 #   1. Single monotonic counter: `raised` only ever increases and is only ever
 #      compared against `goal`.
@@ -504,13 +512,16 @@ class Crowdfund(ARC4Contract):
         ).submit()
 
     # ── admin_sweep_asa ─────────────────────────────────────────────────────────
-    # Decoupled ASA close-out to the ADMIN, kept separate from the ALGO close.
+    # Decoupled ASA close-out, kept separate from the ALGO close. Admin-triggered,
+    # but the tokens close to the CREATOR (see body) — the admin is only the party
+    # who can fire it after the grace, not the recipient.
     #   SUCCESS (success_grace_expired): sweeps tokens of investors who never
-    #     finalized; unclaimed value forfeits to the admin.
+    #     finalized; unclaimed tokens return to the creator (who provided the pool).
     #   FAILURE (failure_grace_expired): fallback only; if the creator never
-    #     reclaims within the 6-month failure grace, admin sweeps — symmetric with
-    #     the success side, prevents a non-reclaiming creator locking the ALGO
-    #     close (which requires asa_id == 0).
+    #     reclaims within the 6-month failure grace, the admin fires the sweep and
+    #     the tokens still return to the creator — symmetric with the success side,
+    #     and it prevents a non-reclaiming creator locking the ALGO close (which
+    #     requires asa_id == 0).
     # PROCEDURE: the admin must opt into asa_id BEFORE calling, or the inner
     # asset_close_to reverts. On revert nothing is lost — opt in and retry.
     @abimethod

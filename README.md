@@ -140,8 +140,24 @@ positive whole number of ALGO).
 ### ASA close-out ordering
 `admin_claim` requires `asa_id == 0`, so any project-token holding must be closed
 first (`creator_reclaim_asa` on failure, or `admin_sweep_asa` after the grace on
-success). This keeps the ALGO close free of any inner asset transfer that could
-revert and trap funds.
+success). Both close the token pool to the **creator** — the admin's only take is
+the 4% ALGO fee. This keeps the ALGO close free of any inner asset transfer that
+could revert and trap funds.
+
+### Stray-asset recovery (`recover_stray_asa`)
+`app_opt_in_asa` gates only on `asa_id == 0`, so a creator can opt the app into
+more than one asset before `setup` writes `asa_id` (e.g. opt into asset A, then B,
+then set up with B). The app then holds an opt-in to a **stray** asset (A) that the
+normal close-outs — which only close `asa_id` — never clear, and an account
+holding any ASA cannot be closed, wedging the app. `recover_stray_asa(asset)`
+closes out **one** stray asset (any asset whose id is not the live `asa_id`) back
+to the **creator**, freeing the app to eventually close. It can never touch the
+live campaign token (`asset.id != asa_id` is asserted), the proceeds always go to
+the creator (never the caller, so an admin caller can't profit), and it is callable
+by the admin **or** the creator so a wedged app can be cleared even if one party
+vanishes. On a bad argument (the app isn't opted into `asset`) the inner close-out
+simply reverts and nothing changes. The frontend surfaces this automatically only
+when a stray opt-in is detected (ProjectDetail).
 
 ---
 
