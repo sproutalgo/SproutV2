@@ -665,7 +665,6 @@ export default function CreateProject() {
               { l: 'Listing fee',       v: listingFeeAlgo != null ? `${fmtAlgo(listingFeeAlgo, { decimals: 4, smart: true })} ALGO` : '—' },
               { l: 'Success fee (4%)',  v: successFeeAlgo != null ? `${fmtAlgo(successFeeAlgo, { decimals: 2 })} ALGO` : '—' },
               ...(!isDonation && tokensNeeded ? [{ l: 'Tokens to provide', v: fmtAlgo(tokensNeeded) }] : []),
-              ...(milestoneTitle ? [{ l: 'Milestone', v: milestoneTitle }] : []),
               ...((selectedSeriesAppId || milestoneTitle) && Number(seriesTotalGoal) > 0
                 ? [{ l: 'Series total goal', v: `${fmtAlgo(Number(seriesTotalGoal))} ALGO` }]
                 : []),
