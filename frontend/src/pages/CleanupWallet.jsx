@@ -158,7 +158,7 @@ export default function CleanupWallet() {
     }
     if (contrib > 0 && force && !isDonationFunded) {
       const confirmed = window.confirm(
-        `⚠️ You have ${(contrib / 1_000_000).toFixed(6)} ALGO pending in app ${appId}.\n\nForce clearing will permanently forfeit this amount. It cannot be recovered.\n\nProceed?`
+        `⚠️ You MAY have ${(contrib / 1_000_000).toFixed(6)} ALGO pending in app ${appId}.\n\nForce clearing will permanently forfeit this amount. It cannot be recovered.\n\nProceed?`
       )
       if (!confirmed) return
     }
