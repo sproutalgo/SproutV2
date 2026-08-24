@@ -294,12 +294,12 @@ export default function MyProjects() {
       const isAlgoShortfall  = msg.includes('below min') || msg.includes('overspend')
       const isTokenShortfall = msg.includes('underflow') || msg.includes('asset') || msg.includes('AssetAmount')
       if (isAlgoShortfall && !isTokenShortfall) {
-        addToast('Not enough ALGO. Your wallet needs enough ALGO to cover the contract's minimum-balance deposit plus transaction fees. Add ALGO and try again.', 'error', 9000)
+        addToast('Not enough ALGO. Your wallet needs enough ALGO to cover the contract\'s minimum-balance deposit plus transaction fees. Add ALGO and try again.', 'error', 9000)
       } else if (isTokenShortfall && !isAlgoShortfall) {
         addToast('Not enough of your project token. You need at least Goal \u00d7 Rate tokens in your wallet to fund the reward pool. Add tokens and try again.', 'error', 9000)
       } else if (isAlgoShortfall || isTokenShortfall) {
         // Ambiguous — name both so the creator can check the right one.
-        addToast('Setup couldn't fund the token pool. This is usually one of two things: (1) not enough ALGO for the minimum-balance deposit and fees, or (2) not enough of your project token (you need Goal \u00d7 Rate tokens). Check both balances and try again.', 'error', 10000)
+        addToast('Setup couldn\'t fund the token pool. This is usually one of two things: (1) not enough ALGO for the minimum-balance deposit and fees, or (2) not enough of your project token (you need Goal \u00d7 Rate tokens). Check both balances and try again.', 'error', 10000)
       } else {
         addToast(msg || 'Setup failed', 'error')
       }
