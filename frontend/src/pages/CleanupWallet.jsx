@@ -300,7 +300,7 @@ export default function CleanupWallet() {
                       </div>
                       {hasPendingClaim && (
                         <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>
-                          You have {(contrib / 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 6 })} ALGO pending.
+                          You MAY have {(contrib / 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 6 })} ALGO pending.
                           Clearing now would forfeit it permanently.
                         </div>
                       )}
