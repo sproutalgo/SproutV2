@@ -301,7 +301,7 @@ export default function CleanupWallet() {
                       {hasPendingClaim && (
                         <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 6 }}>
                           You MAY have {(contrib / 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 6 })} ALGO pending.
-                          Clearing now would forfeit it permanently.
+                          Clearing now would forfeit it permanently. Please verify that ALGO has been withdrawn before closing.
                         </div>
                       )}
                       {isDonationFunded && contrib > 0 && (
@@ -324,7 +324,7 @@ export default function CleanupWallet() {
                             disabled={actioningId === `app-${appId}`}
                             onClick={() => handleClearApp(appId, contrib, true)}
                           >
-                            {actioningId === `app-${appId}` ? 'Clearing…' : 'Force clear (forfeit)'}
+                            {actioningId === `app-${appId}` ? 'Clearing…' : 'Force clear'}
                           </button>
                         </div>
                       )
