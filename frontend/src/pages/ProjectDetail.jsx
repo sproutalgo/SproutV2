@@ -375,7 +375,15 @@ export default function ProjectDetail() {
   // (creator_reclaim_asa on failure; on success the admin sweeps unclaimed
   // tokens). Gated on grace by the contract, which surfaces "grace not expired".
   const isCreatorViewer  = !!activeAddress && activeAddress === safeGs.creator
-  const canCreatorClose  = isCreatorViewer && !adminClaimed && asaIdOnChain === 0 && (succeeded || failed)
+  // Creator-side close is intentionally HIDDEN from the UI. Closing the contract
+  // is handled by the admin (after the grace period). Creators were being shown
+  // this button before grace expired and hitting a contract-level "grace not
+  // expired" assert, which surfaced as a confusing on-chain error. The contract
+  // still permits a creator close (the ability is preserved on-chain for
+  // abandonment safety), but we no longer expose it here. To re-enable, restore
+  // the original gate:
+  //   isCreatorViewer && !adminClaimed && asaIdOnChain === 0 && (succeeded || failed)
+  const canCreatorClose  = false
   // Stray-asset recovery: only when the app actually holds a stray opt-in (the
   // double-opt-in wedge), visible to admin or creator (matches the contract's
   // recover_stray_asa permissions). Appears on wedged apps only — nothing shows
