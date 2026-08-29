@@ -13,7 +13,7 @@ export default function Home() {
   const [loading, setLoading]       = useState(true)
   const [filter, setFilter]         = useState('All')
   const [showDonations, setShowDonations] = useState(true)
-  const [showCancelled, setShowCancelled] = useState(false)
+  const [showCancelled, setShowCancelled] = useState(true)
   const [search, setSearch]         = useState('')
   const [error, setError]           = useState(null)
   const [page, setPage]             = useState(1)
