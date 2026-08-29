@@ -133,6 +133,11 @@ export default function AdminDashboard() {
         (await buildAdminFeeClaimTxn({ sender: activeAddress, appId })).toByte()
       ])
       addToast('Success fee collected.', 'success')
+      // Reflect the collected fee immediately so the button becomes the
+      // "Fee collected" badge without waiting for a manual refresh.
+      setProjects(prev => prev.map(p => p.id === appId
+        ? { ...p, meta: { ...p.meta, on_chain_admin_fee_claimed: true }, gs: { ...p.gs, admin_fee_claimed: 1 } }
+        : p))
     } catch (e) {
       addToast(e?.message || 'Fee claim failed', 'error')
     } finally { setActioningId(null) }
@@ -320,6 +325,16 @@ export default function AdminDashboard() {
           const isDistributed = status === 'distributed'
           const raised    = Number(p.gs?.raised ?? 0)
           const goal      = Number(p.gs?.goal   ?? p.meta?.goal_micro ?? 1)
+          // The 4% success fee is collectible as soon as the campaign is funded
+          // on-chain and stays collectible until it's actually been claimed —
+          // regardless of whether the creator has claimed their 96% (which flips
+          // the derived status to 'distributed'). Gate the fee button on the
+          // on-chain fee flag, NOT on `status`, or the creator's claim hides it.
+          const fundedRoundOnChain = Number(p.gs?.funded_round ?? 0)
+          const feeClaimedOnChain  = Number(p.gs?.admin_fee_claimed ?? 0) === 1
+            || !!p.meta?.on_chain_admin_fee_claimed
+          const isFundedOnChain    = fundedRoundOnChain > 0 || raised >= goal
+          const feeCollectible     = isFundedOnChain && status !== 'cancelled' && !feeClaimedOnChain
           const pct       = pctNum(raised, goal)
           const days      = daysLeftLabel(Number(p.gs?.deadline ?? 0), 0)
           const hue       = categoryHue(p.meta?.category)
@@ -375,16 +390,23 @@ export default function AdminDashboard() {
                     {isActioning ? 'Processing…' : 'Close contract'}
                   </button>
                 )}
+                {feeCollectible && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    disabled={isActioning}
+                    onClick={() => handleCollectFee(p.id)}
+                    title="Collect the 4% success fee now — no grace wait"
+                  >
+                    {isActioning ? 'Processing…' : 'Collect 4% fee'}
+                  </button>
+                )}
+                {isFundedOnChain && status !== 'cancelled' && feeClaimedOnChain && (
+                  <span className="badge" style={{ padding: '2px 9px', fontSize: 11, color: 'var(--success)' }}>
+                    Fee collected
+                  </span>
+                )}
                 {!isCancelled && status === 'funded' && (
                   <>
-                    <button
-                      className="btn btn-primary btn-sm"
-                      disabled={isActioning || p.meta?.on_chain_admin_fee_claimed}
-                      onClick={() => handleCollectFee(p.id)}
-                      title="Collect the 4% success fee now — no grace wait"
-                    >
-                      {p.meta?.on_chain_admin_fee_claimed ? 'Fee collected' : 'Collect 4% fee'}
-                    </button>
                     <button
                       className="btn btn-soft btn-sm"
                       disabled={isActioning}
