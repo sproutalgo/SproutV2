@@ -82,6 +82,25 @@ export default function CreateProject() {
   const durDays = Number(form.durationDays) || 0
   const durRounds = Math.round(durDays * ROUNDS_PER_DAY)
 
+  // Exchange-rate validity — checked against the RAW field values, not the
+  // coerced numbers above (Number('0') || 1 masks a 0 as 1). The contract
+  // asserts algo_per_bundle > 0 at create and treats tokens_per_bundle == 0 as a
+  // donation, so a REWARD campaign must have BOTH values as integers >= 1 or the
+  // deploy either reverts (apb==0) or silently becomes a zero-token / mismatched
+  // campaign (tpb==0). Only enforced for reward campaigns; donations don't use
+  // these fields.
+  const rateEntered = form.ratePerAlgo.trim() !== ''
+  const apbEntered  = form.algoPerBundle.trim() !== ''
+  const rateValid   = Number.isInteger(Number(form.ratePerAlgo))    && Number(form.ratePerAlgo)    >= 1
+  const apbValid    = Number.isInteger(Number(form.algoPerBundle))  && Number(form.algoPerBundle)  >= 1
+  const rateError   = !isDonation && rateEntered && !rateValid
+    ? 'Tokens per bundle must be a whole number of at least 1.'
+    : null
+  const apbError    = !isDonation && apbEntered && !apbValid
+    ? 'ALGO per bundle must be a whole number of at least 1.'
+    : null
+  const exchangeRateValid = isDonation || (rateValid && apbValid)
+
   // Listing fee — all campaigns have a minimum of 10 ALGO.
   // Kept as raw numbers here; formatted for display via fmtAlgo (en-US pinned).
   const rawListingFee = goal && durDays ? (goal * durDays) / 100_000 : 0
@@ -105,7 +124,7 @@ export default function CreateProject() {
     { ok: !!form.name.trim(),                                       label: 'Project name' },
     { ok: !!form.tagline.trim(),                                    label: 'Tagline' },
     { ok: goal >= MIN_GOAL_ALGO && goal <= MAX_GOAL_ALGO,           label: `Funding goal (${MIN_GOAL_ALGO}–${fmtAlgo(MAX_GOAL_ALGO)} ALGO)` },
-    ...(!isDonation ? [{ ok: rate > 0 && algoPerBundle > 0, label: 'Exchange rate set' }] : []),
+    ...(!isDonation ? [{ ok: exchangeRateValid, label: 'Exchange rate (both values ≥ 1)' }] : []),
     { ok: durDays >= MIN_DAYS && durDays <= MAX_DAYS,               label: `Duration (${MIN_DAYS}–${MAX_DAYS} days)` },
     { ok: !websiteError,                                            label: 'Website URL valid (or blank)' },
   ]
@@ -125,6 +144,7 @@ export default function CreateProject() {
   async function handleDeploy() {
     if (!activeAddress) return addToast('Connect your wallet first', 'info')
     if (!allOk) return addToast('Complete all required fields first', 'error')
+    if (!isDonation && !exchangeRateValid) return addToast('Exchange rate must use whole numbers of at least 1 for both values.', 'error')
     if (durError) return addToast(durError, 'error')
     if (!ADMIN_ADDRESS) return addToast('Set VITE_ADMIN_ADDRESS in your .env', 'error')
 
@@ -178,8 +198,10 @@ export default function CreateProject() {
       const clearProgram    = await compileTeal(CLEAR_TEAL)
       const goalMicro       = algoToMicro(goal)
       // Two-value rate: donation => tokens_per_bundle 0; else the entered ratio.
-      const tpbArg          = isDonation ? 0 : rate
-      const apbArg          = isDonation ? 1 : algoPerBundle
+      // For reward campaigns, use the validated raw integers directly so a 0 can
+      // never be silently coerced to 1 (the contract also asserts apb > 0).
+      const tpbArg          = isDonation ? 0 : Number(form.ratePerAlgo)
+      const apbArg          = isDonation ? 1 : Number(form.algoPerBundle)
 
       const { txns, listingFee, appCreateTxnId } = await buildCreateAppTxnGroup({
         sender: activeAddress, approvalProgram, clearProgram,
@@ -537,8 +559,13 @@ export default function CreateProject() {
                         <span className="faint" style={{ fontSize: 13.5, whiteSpace: 'nowrap' }}>ALGO</span>
                       </div>
                     </div>
+                    {(rateError || apbError) && (
+                      <span className="field-hint" style={{ color: 'var(--danger)' }}>
+                        {rateError || apbError}
+                      </span>
+                    )}
                     <span className="field-hint">
-                      How many whole tokens a backer receives per amount of ALGO. Example: "1 token per 10 ALGO" means a 10 ALGO contribution yields 1 token, and amounts below the ratio round down. Token decimals are handled automatically during setup.
+                      How many whole tokens a backer receives per amount of ALGO. Example: "1 token per 10 ALGO" means a 10 ALGO contribution yields 1 token, and amounts below the ratio round down. Both values must be whole numbers of at least 1. Token decimals are handled automatically during setup.
                     </span>
                   </div>
                 )}
@@ -617,7 +644,11 @@ export default function CreateProject() {
               Back
             </button>
             {step < 3 && (
-              <button className="btn btn-primary" onClick={() => setStep(s => Math.min(3, s + 1))}>
+              <button
+                className="btn btn-primary"
+                disabled={step === 2 && !exchangeRateValid}
+                onClick={() => setStep(s => Math.min(3, s + 1))}
+              >
                 Continue <Icon.arrow style={{ width: 17, height: 17 }} />
               </button>
             )}
@@ -665,6 +696,7 @@ export default function CreateProject() {
               { l: 'Listing fee',       v: listingFeeAlgo != null ? `${fmtAlgo(listingFeeAlgo, { decimals: 4, smart: true })} ALGO` : '—' },
               { l: 'Success fee (4%)',  v: successFeeAlgo != null ? `${fmtAlgo(successFeeAlgo, { decimals: 2 })} ALGO` : '—' },
               ...(!isDonation && tokensNeeded ? [{ l: 'Tokens to provide', v: fmtAlgo(tokensNeeded) }] : []),
+              ...(milestoneTitle ? [{ l: 'Milestone', v: milestoneTitle }] : []),
               ...((selectedSeriesAppId || milestoneTitle) && Number(seriesTotalGoal) > 0
                 ? [{ l: 'Series total goal', v: `${fmtAlgo(Number(seriesTotalGoal))} ALGO` }]
                 : []),
