@@ -432,7 +432,12 @@ export default function CreateProject() {
                       {form.highlights.map((h, i) => (
                         <div className="hi-row" key={i}>
                           <span className="hi-bullet"><Icon.check /></span>
-                          <input id={`highlight-${i}`} name={`highlight-${i}`} aria-label={`Highlight ${i + 1}`} className="input" maxLength={500} placeholder={['e.g. Audited by two independent firms', 'e.g. Live on mainnet with 1,400+ wallets', 'e.g. Backed by the Algorand Foundation'][i]} value={h} onChange={setHi(i)} />
+                          <div style={{ flex: 1 }}>
+                            <input id={`highlight-${i}`} name={`highlight-${i}`} aria-label={`Highlight ${i + 1}`} className="input" style={{ width: '100%', boxSizing: 'border-box' }} maxLength={500} placeholder={['e.g. Audited by two independent firms', 'e.g. Live on mainnet with 1,400+ wallets', 'e.g. Backed by the Algorand Foundation'][i]} value={h} onChange={setHi(i)} />
+                            <span className="field-hint" style={{ color: h.length >= 500 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                              {h.length}/500 characters
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -465,6 +470,9 @@ export default function CreateProject() {
                   <div className="field" style={{ marginBottom: 12 }}>
                     <label htmlFor="cp-milestone-title">This milestone</label>
                     <input id="cp-milestone-title" className="input" maxLength={80} placeholder="e.g. This Milestone — Mainnet Launch" value={milestoneTitle} onChange={e => setMilestoneTitle(e.target.value)} />
+                    <span className="field-hint" style={{ color: milestoneTitle.length >= 80 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {milestoneTitle.length}/80 characters
+                    </span>
                   </div>
                   <div className="field" style={{ marginBottom: 12 }}>
                     <label htmlFor="cp-milestone-desc">Milestone description</label>
@@ -478,12 +486,16 @@ export default function CreateProject() {
                     <input
                       id="cp-series-goal"
                       className="input no-spin"
-                      type="number"
-                      min="0"
-                      step="1"
+                      type="text"
+                      inputMode="numeric"
                       placeholder="e.g. 500000"
                       value={seriesTotalGoal}
                       onChange={e => setSeriesTotalGoal(e.target.value.replace(/[^0-9]/g, ''))}
+                      onPaste={e => {
+                        e.preventDefault()
+                        const digits = (e.clipboardData.getData('text') || '').replace(/[^0-9]/g, '')
+                        setSeriesTotalGoal(prev => (prev + digits))
+                      }}
                     />
                     <span className="field-hint" style={Number(seriesTotalGoal) > 0 && goal > 0 && Number(seriesTotalGoal) < goal ? { color: 'var(--warn)' } : undefined}>
                       {Number(seriesTotalGoal) > 0 && goal > 0 && Number(seriesTotalGoal) < goal
@@ -496,17 +508,22 @@ export default function CreateProject() {
                     <div className="field-label">Planned future milestones</div>
                     {plannedMilestones.map((m, i) => (
                       <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-                        <input
-                          id={`planned-milestone-${i}`}
-                          name={`planned-milestone-${i}`}
-                          aria-label={`Planned milestone ${i + 1} title`}
-                          className="input"
-                          maxLength={80}
-                          placeholder="Next Milestone Title"
-                          value={m.title}
-                          onChange={e => updatePlannedMilestone(i, 'title', e.target.value)}
-                          style={{ flex: 1 }}
-                        />
+                        <div style={{ flex: 1 }}>
+                          <input
+                            id={`planned-milestone-${i}`}
+                            name={`planned-milestone-${i}`}
+                            aria-label={`Planned milestone ${i + 1} title`}
+                            className="input"
+                            style={{ width: '100%', boxSizing: 'border-box' }}
+                            maxLength={80}
+                            placeholder="Next Milestone Title"
+                            value={m.title}
+                            onChange={e => updatePlannedMilestone(i, 'title', e.target.value)}
+                          />
+                          <span className="field-hint" style={{ color: m.title.length >= 80 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                            {m.title.length}/80 characters
+                          </span>
+                        </div>
                         <button type="button" onClick={() => removePlannedMilestone(i)} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '6px 10px' }}>✕</button>
                       </div>
                     ))}
