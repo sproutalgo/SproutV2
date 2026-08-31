@@ -14,6 +14,7 @@ import Terms         from './pages/Terms'
 import DemoProject   from './pages/DemoProject'
 import DonationSetup from './pages/DonationSetup'
 import ComingSoon    from './pages/ComingSoon'
+import LegacyReclaim from './pages/LegacyReclaim'
 
 /**
  * Maintenance gate. When VITE_MAINTENANCE === 'true' the public sees ComingSoon.
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/faq"     element={<FAQ />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms"   element={<Terms />} />
+            <Route path="/reclaim" element={<LegacyReclaim />} />
           </Routes>
         </Layout>
       </BrowserRouter>
