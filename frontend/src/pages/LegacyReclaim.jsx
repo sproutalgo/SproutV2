@@ -68,12 +68,23 @@ export default function LegacyReclaim() {
       const goal        = Number(gs.goal ?? 0)
       const deadline    = Number(gs.deadline ?? 0)
 
-      // Old contract's `failed` = funded_round == 0 AND (cancelled OR past deadline).
-      const status = await algodClient.status().do()
-      const round = Number(status['last-round'])
-      const failed = fundedRound === 0 && (cancelled || round > deadline)
+      // Determine "failed". The real bug was the round read: algosdk v3
+      // camelCases the status field to `lastRound`, so reading `last-round` gave
+      // undefined -> NaN and the deadline comparison silently failed. Read both
+      // spellings so it works across SDK versions.
+      let round = 0
+      try {
+        const status = await algodClient.status().do()
+        round = Number(status.lastRound ?? status['last-round'] ?? 0)
+      } catch { /* best-effort; if it fails we fall back to cancelled-only */ }
 
-      setState({ asaId, cancelled, fundedRound, raised, goal, failed })
+      // failed = didn't succeed AND genuinely ended (cancelled OR deadline passed).
+      // A still-active campaign (funded_round 0, before deadline) is NOT failed.
+      const succeeded   = fundedRound > 0
+      const pastDeadline = round > 0 && round > deadline
+      const failed = !succeeded && (cancelled || pastDeadline)
+
+      setState({ asaId, cancelled, fundedRound, raised, goal, deadline, failed })
 
       // Is the creator opted into the ASA? (required for the close to succeed)
       // Only relevant when the creator is connected; for the admin preview we
