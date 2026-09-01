@@ -175,7 +175,7 @@ export default function FAQ() {
         Can't find an answer?{' '}
         <Link to="/create" style={{ color: 'var(--accent)' }}>Launch a campaign</Link>
         {' '}or explore the{' '}
-        <a href="https://github.com/sproutalgo/Algorand-Crowdfund" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>open-source codebase</a>.
+        <a href="https://github.com/sproutalgo/SproutV2" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>open-source codebase</a>.
       </p>
 
       {SECTIONS.map(section => (
