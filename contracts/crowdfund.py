@@ -1,18 +1,5 @@
 # Crowdfunding App (stateful, smart-contract account) — Puya / Algorand Python.
 #
-# Originally a direct, logic-preserving port of the PyTeal contract to Algorand
-# Python (Puya). The initial port reproduced every assertion, guard, state
-# transition, inner transaction, and grace/overflow rule exactly. Since then the
-# contract has intentionally DIVERGED from the PyTeal original in two ways, noted
-# on the affected methods below:
-#   • Residual value (unclaimed tokens via admin_sweep_asa, and residual ALGO via
-#     admin_claim) now returns to the CREATOR, not the admin. The admin's only
-#     take is the 4% success fee. (Was: forfeited to the admin.)
-#   • A new recovery method, recover_stray_asa, has no PyTeal ancestor. It clears
-#     a stray ASA opt-in (the double-opt-in wedge) back to the creator so the app
-#     can eventually close.
-# Everything else remains a faithful reproduction of the original on-chain logic.
-#
 # Key design properties:
 #
 #   1. Single monotonic counter: `raised` only ever increases and is only ever
