@@ -1,33 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from './UI'
 
-// Bump this key if you ever want the popup to re-show to everyone (e.g. a new
-// challenge). Dismissal is remembered per-visitor via localStorage.
-const DISMISS_KEY = 'sprout-builder-challenge-2026'
+// Bump this key if you ever want the popup to auto-show again to everyone.
+export const CHALLENGE_DISMISS_KEY = 'sprout-builder-challenge-2026'
 
-export default function ChallengePopup() {
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem(DISMISS_KEY)) setOpen(true)
-    } catch {
-      setOpen(true) // if storage is blocked, still show it
-    }
-  }, [])
-
-  function dismiss() {
-    try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* non-critical */ }
-    setOpen(false)
-  }
-
+// Controlled component: Home owns `open` and passes `onClose`. This lets both the
+// auto-show-on-load logic and a "reopen" button live in Home and share one state.
+export default function ChallengePopup({ open, onClose }) {
   if (!open) return null
 
   return (
     <div
       className="modal-overlay"
-      onClick={(e) => e.target === e.currentTarget && dismiss()}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
       role="dialog"
       aria-modal="true"
       aria-label="Sprout Builder Challenge"
@@ -42,7 +28,7 @@ export default function ChallengePopup() {
           </div>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={dismiss}
+            onClick={onClose}
             aria-label="Close"
             style={{ padding: '4px 10px', marginTop: -2 }}
           >
@@ -97,8 +83,8 @@ export default function ChallengePopup() {
         </p>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 22, justifyContent: 'flex-end' }}>
-          <button className="btn btn-ghost" onClick={dismiss}>Maybe later</button>
-          <Link to="/create" className="btn btn-primary" onClick={dismiss}>
+          <button className="btn btn-ghost" onClick={onClose}>Maybe later</button>
+          <Link to="/create" className="btn btn-primary" onClick={onClose}>
             Launch a campaign <Icon.arrow style={{ width: 16, height: 16 }} />
           </Link>
         </div>

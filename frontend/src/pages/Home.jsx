@@ -3,7 +3,7 @@ import { algodClient, fetchOnChainBatch, gsFromCache } from '../utils/algorand'
 import { Link } from 'react-router-dom'
 import { fetchPublicProjects, fetchPublicStats } from '../utils/api'
 import ProjectCard from '../components/ProjectCard'
-import ChallengePopup from '../components/ChallengePopup'
+import ChallengePopup, { CHALLENGE_DISMISS_KEY } from '../components/ChallengePopup'
 import { SkeletonCard, Icon, Stat, deriveProjectStatus, fmtAlgo } from '../components/UI'
 
 const CATEGORIES = ['DeFi', 'RWA', 'AI', 'NFT', 'Gaming', 'Infrastructure', 'Social', 'Other']
@@ -22,6 +22,20 @@ export default function Home() {
   const [allProjects, setAllProjects] = useState([])
   const [platformStats, setPlatformStats] = useState(null)
   const [currentRound, setCurrentRound] = useState(0)
+
+  // Builder Challenge popup: auto-shows once per visitor (remembered via
+  // localStorage); the hero button below can reopen it any time.
+  const [challengeOpen, setChallengeOpen] = useState(false)
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(CHALLENGE_DISMISS_KEY)) setChallengeOpen(true)
+    } catch { setChallengeOpen(true) }
+  }, [])
+  const closeChallenge = () => {
+    try { localStorage.setItem(CHALLENGE_DISMISS_KEY, '1') } catch { /* non-critical */ }
+    setChallengeOpen(false)
+  }
+  const openChallenge = () => setChallengeOpen(true)
 
   // Fetch current round once on mount for accurate expiry display.
   // A single algod call rather than per-project — good tradeoff.
@@ -194,7 +208,7 @@ export default function Home() {
 
   return (
     <div className="rise">
-      <ChallengePopup />
+      <ChallengePopup open={challengeOpen} onClose={closeChallenge} />
       {/* ── Hero ── */}
       <section className="hero wrap">
         <div className="hero-grid">
@@ -218,6 +232,9 @@ export default function Home() {
               <Link to="/faq" className="btn btn-ghost btn-lg">
                 How escrow works
               </Link>
+              <button type="button" className="btn btn-outline btn-lg" onClick={openChallenge}>
+                🏆 Builder Challenge — 25K ALGO
+              </button>
             </div>
             {hasStats && (
               <div className="hero-stats">
