@@ -3,6 +3,7 @@ import { algodClient, fetchOnChainBatch, gsFromCache } from '../utils/algorand'
 import { Link } from 'react-router-dom'
 import { fetchPublicProjects, fetchPublicStats } from '../utils/api'
 import ProjectCard from '../components/ProjectCard'
+import ChallengePopup from '../components/ChallengePopup'
 import { SkeletonCard, Icon, Stat, deriveProjectStatus, fmtAlgo } from '../components/UI'
 
 const CATEGORIES = ['DeFi', 'RWA', 'AI', 'NFT', 'Gaming', 'Infrastructure', 'Social', 'Other']
@@ -193,6 +194,7 @@ export default function Home() {
 
   return (
     <div className="rise">
+      <ChallengePopup />
       {/* ── Hero ── */}
       <section className="hero wrap">
         <div className="hero-grid">
