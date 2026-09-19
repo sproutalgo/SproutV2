@@ -682,12 +682,19 @@ export default function CreateProject() {
         </div>
 
         <aside>
-          {/* Live preview — exactly what backers will see on the explore grid.
-              Built from form state; pointer-events disabled so the Link inside
-              the card can't navigate away mid-form. */}
+          {/* Live preview — matches the real explore-grid card proportions.
+              The grid renders cards at ~350px wide (3 columns); the preview
+              sidebar is ~340px but the card's own padding shrinks the image
+              below grid width, cropping harder than production. We size the
+              preview's image box to the true grid aspect (~2.33:1) so the crop
+              the creator sees is what backers actually get. */}
           <div className="card summary-card" style={{ position: 'static', marginBottom: 20 }}>
             <h4>Live preview</h4>
-            <div style={{ pointerEvents: 'none', marginTop: 4 }} aria-hidden="true">
+            <div
+              style={{ pointerEvents: 'none', marginTop: 4 }}
+              aria-hidden="true"
+              className="cp-live-preview"
+            >
               <ProjectCard
                 project={{
                   id: 0,
