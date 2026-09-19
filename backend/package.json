@@ -17,6 +17,7 @@
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
+    "multer": "^2.4.0",
     "node-cron": "^3.0.3",
     "tweetnacl": "^1.0.3"
   },
