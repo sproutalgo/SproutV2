@@ -13,6 +13,24 @@ import { signAuthChallenge } from './algorand'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
+/**
+ * Upload a campaign banner image to the backend, which stores it in Supabase
+ * Storage and returns a public URL. Uses its own fetch (NOT apiFetch) because
+ * multipart/form-data must let the browser set the Content-Type boundary — the
+ * JSON wrapper would break it. Server enforces type (png/jpg/webp) and 2 MB cap.
+ */
+export async function uploadCampaignImage(file) {
+  const fd = new FormData()
+  fd.append('image', file)
+  const res = await fetch(`${API_BASE}/upload/campaign-image`, {
+    method: 'POST',
+    body: fd, // no Content-Type header — browser sets multipart boundary
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`)
+  return data.url
+}
+
 // ─── Core fetch wrapper ───────────────────────────────────────────────────────
 
 async function apiFetch(path, options = {}) {

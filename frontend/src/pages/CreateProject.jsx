@@ -7,6 +7,7 @@ import { registerProject, fetchCreatorProjectsMeta } from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { Icon, fmtAlgo } from '../components/UI'
 import ProjectCard from '../components/ProjectCard'
+import ImageUpload from '../components/ImageUpload'
 
 import APPROVAL_TEAL from '../../../contracts/approval.teal?raw'
 import CLEAR_TEAL    from '../../../contracts/clear.teal?raw'
@@ -52,7 +53,7 @@ export default function CreateProject() {
 
   const [form, setForm] = useState({
     name: '', tagline: '', description: '', category: 'DeFi',
-    highlights: ['', '', ''], websiteUrl: '',
+    highlights: ['', '', ''], websiteUrl: '', imageUrl: '',
     goalAlgo: '', ratePerAlgo: '', algoPerBundle: '1', durationDays: '',
   })
 
@@ -236,6 +237,7 @@ export default function CreateProject() {
       const registrationMeta = {
         name: form.name, tagline: form.tagline, description: form.description,
         category: form.category, websiteUrl: form.websiteUrl,
+        imageUrl: form.imageUrl || '',
         tokenName: '', goalMicro, ratePerAlgo: tpbArg, algoPerBundle: apbArg,
         highlights: form.highlights.filter(h => h.trim()),
         isDonation,
@@ -457,6 +459,13 @@ export default function CreateProject() {
                       ? <span className="field-hint" style={{ color: 'var(--danger)' }}>{websiteError}</span>
                       : <span className="field-hint">Accepted: x.com, twitter.com, github.com, linkedin.com</span>
                     }
+                  </div>
+                  <div className="field span-2">
+                    <ImageUpload
+                      value={form.imageUrl}
+                      onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
+                      onError={(msg) => addToast(msg, 'error')}
+                    />
                   </div>
                 </div>
 
@@ -692,6 +701,7 @@ export default function CreateProject() {
                     name: form.name,
                     tagline: form.tagline,
                     category: form.category,
+                    image_url: form.imageUrl || '',
                     is_donation: isDonation,
                     creator_address: activeAddress || undefined,
                   },

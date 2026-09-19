@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit'
 
 import projectsRouter from './routes/projects.js'
 import healthRouter   from './routes/health.js'
+import uploadRouter   from './routes/upload.js'
 import { startSyncJob } from './jobs/syncJob.js'
 
 const app  = express()
@@ -72,9 +73,17 @@ app.use((req, res, next) => {
   next()
 })
 
+// Tighter limiter for image uploads (heavier than JSON writes).
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many uploads, please try again shortly.' },
+})
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/health',   healthRouter)
 app.use('/api/projects', projectsRouter)
+app.use('/api/upload',   uploadLimiter, uploadRouter)
 
 // 404 handler
 app.use((req, res) => {
