@@ -63,7 +63,7 @@ export default function DonationSetup() {
         if (cancelled || !row) return
         setMeta({
           name: row.name, tagline: row.tagline, description: row.description,
-          category: row.category, websiteUrl: row.website_url, tokenName: row.token_name,
+          category: row.category, websiteUrl: row.website_url, imageUrl: row.image_url, tokenName: row.token_name,
           goalMicro: row.goal_micro, ratePerAlgo: row.rate_per_algo, algoPerBundle: row.algo_per_bundle,
           highlights: row.highlights, isDonation: true,
           seriesId: row.series_id, seriesGoalMicro: row.series_goal_micro,
@@ -229,7 +229,7 @@ export default function DonationSetup() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Preview card */}
           <div className="card" style={{ overflow: 'hidden' }}>
-            <Cover hue={hue} sym={meta.token_name} imageUrl={meta.image_url} style={{ height: 140 }} />
+            <Cover hue={hue} sym={meta.token_name} imageUrl={meta.imageUrl || meta.image_url} style={{ height: 140 }} />
             <div style={{ padding: '14px 16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span className="badge">{meta.category || 'Other'}</span>
               <h3 style={{ fontSize: 18 }}>{meta.name}</h3>
