@@ -184,7 +184,7 @@ export default function Layout({ children }) {
             <a href="https://x.com/SproutAlgo" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--text-muted)' }}>
               <Icon.x style={{ width: 13, height: 13 }} /> X
             </a>
-            <a href="https://discord.gg/5XPQhK7Kw" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--text-muted)' }}>
+            <a href="https://discord.gg/YfhnVWW52V" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, color: 'var(--text-muted)' }}>
               <Icon.discord style={{ width: 14, height: 14 }} /> Discord
             </a>
           </div>
