@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { Icon } from './UI'
 
@@ -10,7 +11,12 @@ export const CHALLENGE_DISMISS_KEY = 'sprout-builder-challenge-2026'
 export default function ChallengePopup({ open, onClose }) {
   if (!open) return null
 
-  return (
+  // Rendered through a portal to document.body so the fixed-position overlay
+  // anchors to the viewport, not to an ancestor. The Home page root has a
+  // `transform` (its .rise fade-in animation), which would otherwise become the
+  // containing block for position:fixed and push this popup off-screen /
+  // "further down the page" on mobile.
+  return createPortal(
     <div
       className="modal-overlay"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -89,6 +95,7 @@ export default function ChallengePopup({ open, onClose }) {
           </Link>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
