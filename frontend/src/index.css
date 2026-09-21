@@ -829,11 +829,24 @@ input.no-spin { -moz-appearance: textfield; }
   position: fixed; inset: 0; z-index: 100;
   background: rgba(10, 16, 13, 0.55); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center; padding: 24px;
+  /* Allow the overlay itself to scroll if a modal is taller than the screen,
+     so nothing lands off-screen on small viewports. */
+  overflow-y: auto;
 }
 .modal-box {
   background: var(--surface); border: 1px solid var(--border-strong);
   border-radius: var(--r-xl); padding: 32px; width: 100%; max-width: 400px;
   box-shadow: var(--shadow-lg); animation: rise .2s cubic-bezier(.2,.7,.3,1) both;
+  /* Keep the box within the viewport and scroll its own content when tall
+     (e.g. the Builder Challenge popup on mobile), instead of overflowing above
+     and below the fold. */
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+}
+@media (max-width: 560px) {
+  .modal-overlay { padding: 12px; }
+  .modal-box { padding: 22px; max-height: calc(100dvh - 24px); }
 }
 .btn-outline {
   background: var(--surface); color: var(--text); border: 1px solid var(--border);
