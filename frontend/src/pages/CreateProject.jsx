@@ -7,6 +7,7 @@ import { registerProject, fetchCreatorProjectsMeta } from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { Icon, fmtAlgo } from '../components/UI'
 import ProjectCard from '../components/ProjectCard'
+import ImageUpload from '../components/ImageUpload'
 
 import APPROVAL_TEAL from '../../../contracts/approval.teal?raw'
 import CLEAR_TEAL    from '../../../contracts/clear.teal?raw'
@@ -52,7 +53,7 @@ export default function CreateProject() {
 
   const [form, setForm] = useState({
     name: '', tagline: '', description: '', category: 'DeFi',
-    highlights: ['', '', ''], websiteUrl: '',
+    highlights: ['', '', ''], websiteUrl: '', imageUrl: '',
     goalAlgo: '', ratePerAlgo: '', algoPerBundle: '1', durationDays: '',
   })
 
@@ -236,6 +237,7 @@ export default function CreateProject() {
       const registrationMeta = {
         name: form.name, tagline: form.tagline, description: form.description,
         category: form.category, websiteUrl: form.websiteUrl,
+        imageUrl: form.imageUrl || '',
         tokenName: '', goalMicro, ratePerAlgo: tpbArg, algoPerBundle: apbArg,
         highlights: form.highlights.filter(h => h.trim()),
         isDonation,
@@ -482,6 +484,13 @@ export default function CreateProject() {
                       : <span className="field-hint">Accepted: x.com, twitter.com, github.com, linkedin.com</span>
                     }
                   </div>
+                  <div className="field span-2">
+                    <ImageUpload
+                      value={form.imageUrl}
+                      onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
+                      onError={(msg) => addToast(msg, 'error')}
+                    />
+                  </div>
                 </div>
 
                 {/* Series / milestone section */}
@@ -697,12 +706,19 @@ export default function CreateProject() {
         </div>
 
         <aside>
-          {/* Live preview — exactly what backers will see on the explore grid.
-              Built from form state; pointer-events disabled so the Link inside
-              the card can't navigate away mid-form. */}
+          {/* Live preview — matches the real explore-grid card proportions.
+              The grid renders cards at ~350px wide (3 columns); the preview
+              sidebar is ~340px but the card's own padding shrinks the image
+              below grid width, cropping harder than production. We size the
+              preview's image box to the true grid aspect (~2.33:1) so the crop
+              the creator sees is what backers actually get. */}
           <div className="card summary-card" style={{ position: 'static', marginBottom: 20 }}>
             <h4>Live preview</h4>
-            <div style={{ pointerEvents: 'none', marginTop: 4 }} aria-hidden="true">
+            <div
+              style={{ pointerEvents: 'none', marginTop: 4 }}
+              aria-hidden="true"
+              className="cp-live-preview"
+            >
               <ProjectCard
                 project={{
                   id: 0,
@@ -716,6 +732,7 @@ export default function CreateProject() {
                     name: form.name,
                     tagline: form.tagline,
                     category: form.category,
+                    image_url: form.imageUrl || '',
                     is_donation: isDonation,
                     creator_address: activeAddress || undefined,
                   },
