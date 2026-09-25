@@ -307,23 +307,101 @@ export async function fetchInvestors(appId) {
   }
 }
 
-/** Poll until txn confirmed, return confirmation object */
-export async function waitForConfirmation(txId, maxRounds = 20) {
-  const statusResp = await algodClient.status().do()
-  let lastRound = Number(statusResp['last-round'] ?? statusResp.lastRound ?? 0)
-  for (let i = 0; i < maxRounds; i++) {
-    const pending = await algodClient.pendingTransactionInformation(txId).do()
-    const confirmedRound = pending['confirmed-round'] ?? pending.confirmedRound ?? 0
-    if (confirmedRound > 0) return pending
-    await algodClient.statusAfterBlock(lastRound + 1).do()
-    lastRound++
-  }
-  throw new Error(`Transaction ${txId} not confirmed after ${maxRounds} rounds (~${Math.round(maxRounds * 2.8)}s). Check the block explorer for status.`)
+// ---------------------------------------------------------------------------
+// Transaction confirmation — resilient to load-balanced-node inconsistency.
+//
+// AlgoNode's public endpoint is load-balanced across many nodes. After you
+// submit a txn to one node, a confirmation poll can hit a DIFFERENT node that
+// hasn't yet synced that txn — making pendingTransactionInformation THROW
+// ("could not find the transaction ... in the last 1000 confirmed rounds").
+// The previous implementation had no try/catch there, so that transient throw
+// was fatal: the deploy was reported as FAILED even though the txn actually
+// confirmed and the listing fee was taken. These helpers tolerate the transient
+// "not found", keep polling, and verify via the indexer before giving up.
+// ---------------------------------------------------------------------------
+
+/** Is this the transient "node can't see the txn yet" case (not a real failure)? */
+function isTxnNotFoundError(err) {
+  const m = String(err?.message || err || '').toLowerCase()
+  return (
+    m.includes('could not find the transaction') ||
+    m.includes('transaction not found') ||
+    m.includes('not found') ||
+    m.includes('no such') ||
+    m.includes('404')
+  )
 }
 
 /**
- * Sign and broadcast a transaction group, then wait for confirmation.
+ * Last-ditch check: did this txn actually confirm, even though algod polling
+ * gave up? The indexer sees confirmed txns independently of whichever algod
+ * node the poll hit. Returns { txn, round } if confirmed, else null.
  */
+async function confirmedViaIndexer(txId) {
+  try {
+    const res = await indexerClient.lookupTransactionByID(txId).do()
+    const txn = res?.transaction ?? res?.['transaction']
+    const round = Number(txn?.['confirmed-round'] ?? txn?.confirmedRound ?? 0)
+    return round > 0 ? { txn, round } : null
+  } catch {
+    return null
+  }
+}
+
+/** Poll until a txn confirms; resilient to transient node inconsistency. */
+export async function waitForConfirmation(txId, maxRounds = 30) {
+  let lastRound = 0
+  try {
+    const statusResp = await algodClient.status().do()
+    lastRound = Number(statusResp['last-round'] ?? statusResp.lastRound ?? 0)
+  } catch { /* status hiccup — proceed; re-fetch below */ }
+
+  for (let i = 0; i < maxRounds; i++) {
+    try {
+      const pending = await algodClient.pendingTransactionInformation(txId).do()
+      const confirmedRound = Number(pending['confirmed-round'] ?? pending.confirmedRound ?? 0)
+      if (confirmedRound > 0) return pending
+      const poolErr = pending['pool-error'] ?? pending.poolError
+      if (poolErr) throw new Error(`Transaction rejected: ${poolErr}`)
+    } catch (err) {
+      if (!isTxnNotFoundError(err)) {
+        // Possibly a real rejection — but double-check the indexer in case it's
+        // a node quirk masquerading as an error.
+        const viaIdx = await confirmedViaIndexer(txId)
+        if (viaIdx) return { 'confirmed-round': viaIdx.round, txn: viaIdx.txn, _viaIndexer: true }
+        throw err
+      }
+      // Transient "not found": the polled node hasn't synced the txn yet.
+      // Tolerate it and keep polling — the common slow-connection case.
+    }
+
+    // Advance a round (tolerate status hiccups on flaky connections).
+    try {
+      await algodClient.statusAfterBlock(lastRound + 1).do()
+      lastRound++
+    } catch {
+      await new Promise(r => setTimeout(r, 1500))
+      try {
+        const s = await algodClient.status().do()
+        lastRound = Number(s['last-round'] ?? s.lastRound ?? lastRound + 1)
+      } catch { lastRound++ }
+    }
+  }
+
+  // Window exhausted — before declaring failure, ask the indexer whether the
+  // txn actually confirmed. This is what prevents a real, confirmed deploy
+  // (fee taken, app created) from being falsely reported as failed.
+  const viaIdx = await confirmedViaIndexer(txId)
+  if (viaIdx) return { 'confirmed-round': viaIdx.round, txn: viaIdx.txn, _viaIndexer: true }
+
+  throw new Error(
+    `Could not confirm transaction ${txId} within ~${Math.round(maxRounds * 2.8)}s. ` +
+    `It may still have gone through — check the block explorer before retrying, and ` +
+    `do NOT redeploy if a listing fee already left your wallet.`
+  )
+}
+
+/** Sign, broadcast, and wait for confirmation. */
 export async function signAndSend(signTransactions, encodedTxns) {
   const signed = await signTransactions(encodedTxns)
   const result = await algodClient.sendRawTransaction(signed).do()
