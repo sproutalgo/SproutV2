@@ -7,7 +7,6 @@ import { registerProject, fetchCreatorProjectsMeta } from '../utils/api'
 import { useToast } from '../context/ToastContext'
 import { Icon, fmtAlgo } from '../components/UI'
 import ProjectCard from '../components/ProjectCard'
-import ImageUpload from '../components/ImageUpload'
 
 import APPROVAL_TEAL from '../../../contracts/approval.teal?raw'
 import CLEAR_TEAL    from '../../../contracts/clear.teal?raw'
@@ -53,7 +52,7 @@ export default function CreateProject() {
 
   const [form, setForm] = useState({
     name: '', tagline: '', description: '', category: 'DeFi',
-    highlights: ['', '', ''], websiteUrl: '', imageUrl: '',
+    highlights: ['', '', ''], websiteUrl: '',
     goalAlgo: '', ratePerAlgo: '', algoPerBundle: '1', durationDays: '',
   })
 
@@ -237,7 +236,6 @@ export default function CreateProject() {
       const registrationMeta = {
         name: form.name, tagline: form.tagline, description: form.description,
         category: form.category, websiteUrl: form.websiteUrl,
-        imageUrl: form.imageUrl || '',
         tokenName: '', goalMicro, ratePerAlgo: tpbArg, algoPerBundle: apbArg,
         highlights: form.highlights.filter(h => h.trim()),
         isDonation,
@@ -258,14 +256,38 @@ export default function CreateProject() {
         isHidden:             isDonation,
       }
 
-      // Register the campaign row at DEPLOY for BOTH types (previously donation
-      // campaigns registered only after funding, so clicking "do this later" left
-      // the deployed contract with no DB row — invisible in My garden and
-      // unreachable, stranding the listing fee). Registering here means the
-      // campaign always appears in My garden in a "needs funding" state and can be
-      // funded later. Donation campaigns are still hidden from Explore until
-      // funded (see the is_funded / on-chain-balance gating on the public grid).
-      await registerProject({ address: activeAddress, appId: newAppId, meta: registrationMeta })
+      // Register the campaign row. The contract is ALREADY deployed and the fee
+      // is ALREADY paid at this point (irreversible), so a failure HERE is NOT a
+      // deploy failure — treat it separately. Retry a few times (covers Render
+      // cold-starts and transient mobile/network blips), and if it still fails,
+      // tell the user the truth: their contract is live and their fee is safe,
+      // and give them a recovery path instead of a misleading "deploy failed".
+      let registered = false
+      let lastErr = null
+      for (let attempt = 1; attempt <= 3 && !registered; attempt++) {
+        try {
+          await registerProject({ address: activeAddress, appId: newAppId, meta: registrationMeta })
+          registered = true
+        } catch (regErr) {
+          lastErr = regErr
+          console.error(`registerProject attempt ${attempt} failed:`, regErr)
+          if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt))
+        }
+      }
+
+      if (!registered) {
+        // Deploy succeeded but registration did not. Do NOT let this fall into the
+        // deploy-failure catch below — that would wrongly tell the user nothing
+        // happened while their fee is spent and their contract is live.
+        console.error('Campaign deployed but registration failed. App ID:', newAppId, lastErr)
+        addToast(
+          `Your campaign deployed on-chain (App ID ${newAppId}) and your fee was received — ` +
+          `it is safe. But saving it to the site didn't go through. Please contact support ` +
+          `with your App ID ${newAppId} and we'll finish listing it. Do not deploy again.`,
+          'error', 0
+        )
+        return
+      }
 
       if (isDonation) {
         // Escrow still needs its minimum-balance deposit before going live. Hand
@@ -459,13 +481,6 @@ export default function CreateProject() {
                       ? <span className="field-hint" style={{ color: 'var(--danger)' }}>{websiteError}</span>
                       : <span className="field-hint">Accepted: x.com, twitter.com, github.com, linkedin.com</span>
                     }
-                  </div>
-                  <div className="field span-2">
-                    <ImageUpload
-                      value={form.imageUrl}
-                      onChange={(url) => setForm(f => ({ ...f, imageUrl: url }))}
-                      onError={(msg) => addToast(msg, 'error')}
-                    />
                   </div>
                 </div>
 
@@ -682,19 +697,12 @@ export default function CreateProject() {
         </div>
 
         <aside>
-          {/* Live preview — matches the real explore-grid card proportions.
-              The grid renders cards at ~350px wide (3 columns); the preview
-              sidebar is ~340px but the card's own padding shrinks the image
-              below grid width, cropping harder than production. We size the
-              preview's image box to the true grid aspect (~2.33:1) so the crop
-              the creator sees is what backers actually get. */}
+          {/* Live preview — exactly what backers will see on the explore grid.
+              Built from form state; pointer-events disabled so the Link inside
+              the card can't navigate away mid-form. */}
           <div className="card summary-card" style={{ position: 'static', marginBottom: 20 }}>
             <h4>Live preview</h4>
-            <div
-              style={{ pointerEvents: 'none', marginTop: 4 }}
-              aria-hidden="true"
-              className="cp-live-preview"
-            >
+            <div style={{ pointerEvents: 'none', marginTop: 4 }} aria-hidden="true">
               <ProjectCard
                 project={{
                   id: 0,
@@ -708,7 +716,6 @@ export default function CreateProject() {
                     name: form.name,
                     tagline: form.tagline,
                     category: form.category,
-                    image_url: form.imageUrl || '',
                     is_donation: isDonation,
                     creator_address: activeAddress || undefined,
                   },
