@@ -802,6 +802,16 @@ input.no-spin { -moz-appearance: textfield; }
 }
 @media (max-width: 640px) {
   .wrap { padding: 0 18px; }
+  /* The detail hero uses background-size:cover in a 340px-tall box. On a narrow
+     mobile viewport that tall-but-narrow shape forces a wide (~2.4:1) banner to
+     scale up until its height fills 340px, cropping the sides heavily (the logo
+     and edge cards get clipped). Sizing the box to the banner's own aspect ratio
+     on mobile makes cover crop gently instead of zooming in. */
+  .detail-cover {
+    height: auto !important;
+    aspect-ratio: 2.4 / 1;
+    max-height: 340px;
+  }
   .section.wrap { padding-top: 36px; padding-bottom: 36px; }
   .trust-strip-inner { padding: 13px 18px; gap: 16px 20px; }
   .demo-strip { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
