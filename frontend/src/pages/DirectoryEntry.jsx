@@ -36,7 +36,7 @@ export default function DirectoryEntry() {
         ← Back to directory
       </Link>
 
-      <Cover hue={hue} label={entry.name} imageUrl={entry.image_url} style={{ height: 340, borderRadius: 'var(--r-md)', marginBottom: 20 }} />
+      <Cover hue={hue} label={undefined} imageUrl={entry.image_url} style={{ height: 340, borderRadius: 'var(--r-md)', marginBottom: 20 }} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {entry.category && <span className="badge">{entry.category}</span>}
