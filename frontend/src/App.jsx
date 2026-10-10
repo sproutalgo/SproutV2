@@ -15,6 +15,11 @@ import DemoProject   from './pages/DemoProject'
 import DonationSetup from './pages/DonationSetup'
 import ComingSoon    from './pages/ComingSoon'
 import LegacyReclaim from './pages/LegacyReclaim'
+import Directory       from './pages/Directory'
+import DirectorySubmit from './pages/DirectorySubmit'
+import DirectoryEntry  from './pages/DirectoryEntry'
+import DirectoryMine   from './pages/DirectoryMine'
+import AdminDirectory  from './pages/AdminDirectory'
 
 /**
  * Maintenance gate. When VITE_MAINTENANCE === 'true' the public sees ComingSoon.
@@ -65,7 +70,12 @@ export default function App() {
             <Route path="/create" element={<CreateProject />} />
             <Route path="/donate-setup" element={<DonationSetup />} />
             <Route path="/my-projects" element={<MyProjects />} />
+            <Route path="/directory" element={<Directory />} />
+            <Route path="/directory/submit" element={<DirectorySubmit />} />
+            <Route path="/directory/mine" element={<DirectoryMine />} />
+            <Route path="/directory/:id" element={<DirectoryEntry />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/directory" element={<AdminDirectory />} />
             <Route path="/cleanup" element={<CleanupWallet />} />
             <Route path="/faq"     element={<FAQ />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />

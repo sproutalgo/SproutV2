@@ -107,6 +107,39 @@ alter table projects add column if not exists planned_milestones      jsonb;
 alter table projects add column if not exists milestone_completed_at  timestamptz;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Directory entries — a FREE, off-chain project directory (not crowdfunding).
+-- Separate from the projects table: no contract, no escrow, no funding fields.
+-- Anyone can submit (wallet-signature verified); entries are admin-approved
+-- before appearing publicly. Reuses the campaign content template (name, tagline,
+-- description, highlights, website, category, image) minus all funding elements.
+-- ─────────────────────────────────────────────────────────────────────────────
+create table if not exists directory_entries (
+  id              uuid primary key default gen_random_uuid(),
+  wallet_address  text        not null,                 -- poster (from the signed submit)
+  name            text        not null,
+  tagline         text,
+  description     text,
+  category        text,
+  website_url     text,
+  image_url       text,
+  highlights      jsonb,
+  status          text        not null default 'pending', -- pending | approved | rejected
+  reviewed_at     timestamptz,
+  reviewed_by     text,                                   -- admin address that actioned it
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+-- Fast lookups: public grid (approved), poster's own list, admin queue (pending).
+create index if not exists directory_entries_status_idx  on directory_entries (status);
+create index if not exists directory_entries_wallet_idx  on directory_entries (wallet_address);
+
+alter table directory_entries enable row level security;
+drop policy if exists "directory public read" on directory_entries;
+create policy "directory public read"
+  on directory_entries for select
+  using (true);   -- API filters by status; service role bypasses RLS for writes
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Row-level security
 -- Public can read projects that aren't hidden.
 -- Only the service role (our backend) can write.

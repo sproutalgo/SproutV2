@@ -215,3 +215,49 @@ export async function markMilestoneComplete({ address, appId, signTransactions }
     method: 'PATCH',
   }, signTransactions, address)
 }
+
+// ─── Directory (free off-chain project directory) ──────────────────────────────
+
+// Public: approved entries for the directory grid.
+export async function fetchDirectory({ page = 1, pageSize = 50 } = {}) {
+  return apiFetch(`/directory?page=${page}&pageSize=${pageSize}`)
+}
+
+// Public: a single directory entry.
+export async function fetchDirectoryEntry(id) {
+  return apiFetch(`/directory/${id}`)
+}
+
+// A poster's own entries (any status).
+export async function fetchMyDirectoryEntries(address) {
+  return apiFetch(`/directory/by-wallet/${address}`)
+}
+
+// Submit a new entry (wallet-signature verified). Lands as 'pending'.
+export async function submitDirectoryEntry({ address, meta, signTransactions }) {
+  return authFetch('/directory/submit', {
+    method: 'POST',
+    body: {
+      name:        meta.name,
+      tagline:     meta.tagline,
+      description: meta.description,
+      category:    meta.category,
+      websiteUrl:  meta.websiteUrl,
+      imageUrl:    meta.imageUrl,
+      highlights:  meta.highlights,
+    },
+  }, signTransactions, address)
+}
+
+// Admin: pending review queue.
+export async function fetchPendingDirectoryEntries({ address, signTransactions }) {
+  return authFetch('/directory/admin/pending', { method: 'GET' }, signTransactions, address)
+}
+
+// Admin: approve or reject an entry.
+export async function setDirectoryEntryStatus({ address, id, status, signTransactions }) {
+  return authFetch(`/directory/admin/${id}/status`, {
+    method: 'PATCH',
+    body: { status },
+  }, signTransactions, address)
+}

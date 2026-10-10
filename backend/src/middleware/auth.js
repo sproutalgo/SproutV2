@@ -113,6 +113,18 @@ export async function verifyAuthTransaction({ address, signedTxnB64, firstValid,
 export function buildResourcePath(reqPath) {
   return (`projects${reqPath}`).replace(/\/$/, '')
 }
+
+/**
+ * Resource path for ANY router mount, matching the frontend's
+ * `path.replace(/^\//, '')`. Derives the resource from the full mounted URL
+ * minus the leading "/api/", so:
+ *   /api/projects/123/status  → "projects/123/status"
+ *   /api/directory/submit     → "directory/submit"
+ * Use this for routers other than the legacy projects router.
+ */
+export function buildResourcePathFromReq(req) {
+  return (`${req.baseUrl}${req.path}`).replace(/^\/api\//, '').replace(/\/$/, '')
+}
 export function requireSignature(req, res, next) {
   const address      = req.headers['x-algo-address']
   const signedTxnB64 = req.headers['x-algo-signed-txn']
@@ -142,6 +154,50 @@ export function requireSignature(req, res, next) {
  */
 export function requireAdmin(req, res, next) {
   requireSignature(req, res, () => {
+    if (!ADMIN_ADDRESS) {
+      return res.status(500).json({ error: 'ADMIN_ADDRESS not configured on server' })
+    }
+    if (req.verifiedAddress !== ADMIN_ADDRESS) {
+      return res.status(403).json({ error: 'Not the admin address' })
+    }
+    next()
+  })
+}
+
+/**
+ * Generic signature middleware for routers other than the legacy projects router.
+ * Identical to requireSignature but derives the resource from the full mounted
+ * URL (via buildResourcePathFromReq) so it works under any mount, e.g. /directory.
+ */
+export function requireSignatureGeneric(req, res, next) {
+  const address      = req.headers['x-algo-address']
+  const signedTxnB64 = req.headers['x-algo-signed-txn']
+  const firstValid   = req.headers['x-algo-first-valid']
+
+  if (!address || !signedTxnB64 || !firstValid) {
+    return res.status(401).json({
+      error: 'Missing auth headers (x-algo-address, x-algo-signed-txn, x-algo-first-valid)',
+    })
+  }
+
+  const resource = buildResourcePathFromReq(req)
+
+  verifyAuthTransaction({ address, signedTxnB64, firstValid: Number(firstValid), resource })
+    .then(result => {
+      if (!result.ok) {
+        return res.status(401).json({ error: `Auth failed: ${result.reason}` })
+      }
+      req.verifiedAddress = address
+      next()
+    })
+    .catch(e => res.status(500).json({ error: e.message || 'Auth verification error' }))
+}
+
+/**
+ * Generic admin middleware (generic signature + admin-address check).
+ */
+export function requireAdminGeneric(req, res, next) {
+  requireSignatureGeneric(req, res, () => {
     if (!ADMIN_ADDRESS) {
       return res.status(500).json({ error: 'ADMIN_ADDRESS not configured on server' })
     }
