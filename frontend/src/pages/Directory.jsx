@@ -53,9 +53,12 @@ export default function Directory() {
             A free directory of Algorand projects. Not a funding campaign — just a place to be discovered.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/directory/submit')}>
-          List your project
-        </button>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <Link to="/directory/mine" className="btn btn-ghost">My listings</Link>
+          <button className="btn btn-primary" onClick={() => navigate('/directory/submit')}>
+            List your project
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: 20 }}>

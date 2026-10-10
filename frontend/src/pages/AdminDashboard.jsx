@@ -281,6 +281,9 @@ export default function AdminDashboard() {
           </span>
           <h1>Admin Dashboard</h1>
           <p>Oversee every campaign, hide policy-violating content, and trigger refunds on cancellation.</p>
+          <Link to="/admin/directory" className="btn btn-ghost btn-sm" style={{ marginTop: 10 }}>
+            Directory review queue →
+          </Link>
         </div>
         <div className="card admin-stats">
           <div className="astat"><div className="astat-v">{stats.total}</div><div className="astat-l">Total</div></div>
