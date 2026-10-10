@@ -44,6 +44,7 @@ export default function Layout({ children }) {
 
   const nav = [
     { label: 'Explore',   to: '/' },
+    { label: 'Directory', to: '/directory' },
     { label: 'My garden', to: '/my-projects' },
     { label: 'FAQ',       to: '/faq' },
     { label: 'Cleanup',   to: '/cleanup' },
