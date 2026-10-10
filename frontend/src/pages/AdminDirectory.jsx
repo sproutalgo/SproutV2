@@ -57,11 +57,11 @@ export default function AdminDirectory() {
     }
   }
 
-  if (!activeAddress) return <div className="container" style={{ padding: 40 }}><div className="alert">Connect your wallet.</div></div>
-  if (!isAdmin) return <div className="container" style={{ padding: 40 }}><div className="alert alert-error">Not authorized.</div></div>
+  if (!activeAddress) return <div className="section wrap"><div className="card" style={{ padding: 14, color: 'var(--text-muted)' }}>Connect your wallet.</div></div>
+  if (!isAdmin) return <div className="section wrap"><div className="card" style={{ padding: 14, color: 'var(--danger)' }}>Not authorized.</div></div>
 
   return (
-    <div className="container" style={{ paddingTop: 24, paddingBottom: 64, maxWidth: 900 }}>
+    <div className="section wrap" style={{ maxWidth: 900 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>Directory review queue</h1>
         <Link to="/admin" className="btn btn-ghost btn-sm">← Campaign admin</Link>
@@ -81,7 +81,7 @@ export default function AdminDirectory() {
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 700, fontSize: 18 }}>{e.name}</span>
-                    {e.category && <span className="chip" style={{ fontSize: 11 }}>{e.category}</span>}
+                    {e.category && <span className="badge">{e.category}</span>}
                   </div>
                   {e.tagline && <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{e.tagline}</div>}
                   <div style={{ fontSize: 12.5, color: 'var(--text-faint)', marginTop: 6 }}>

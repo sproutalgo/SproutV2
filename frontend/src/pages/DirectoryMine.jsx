@@ -27,14 +27,14 @@ export default function DirectoryMine() {
   }, [activeAddress])
 
   return (
-    <div className="container" style={{ paddingTop: 24, paddingBottom: 64, maxWidth: 820 }}>
+    <div className="section wrap" style={{ maxWidth: 820 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>My directory listings</h1>
         <Link to="/directory/submit" className="btn btn-primary">List another project</Link>
       </div>
 
       {!activeAddress ? (
-        <div className="alert">Connect your wallet to see your listings.</div>
+        <div className="card" style={{ padding: 14, color: 'var(--text-muted)' }}>Connect your wallet to see your listings.</div>
       ) : loading ? (
         <div style={{ color: 'var(--text-muted)', padding: 20 }}>Loading…</div>
       ) : entries.length === 0 ? (

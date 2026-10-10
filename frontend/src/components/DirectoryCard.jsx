@@ -1,11 +1,12 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
-import { Cover, categoryHue, shortAddr } from './UI'
+import { Cover, Identicon, categoryHue, shortAddr } from './UI'
 
 /**
- * A directory entry card — the campaign card's presentation minus all funding
- * elements (no progress bar, goal, deadline, or status). Links to the entry's
- * detail page.
+ * A directory entry card — mirrors ProjectCard's frame, cover, and typography
+ * exactly, minus all funding elements (no progress bar, goal, countdown, or
+ * status). Uses the same .pcard / .pcard-body / .pcard-title / .pcard-tag
+ * classes so it looks identical to a campaign card.
  */
 export default function DirectoryCard({ entry }) {
   const hue = categoryHue(entry.category)
@@ -13,25 +14,32 @@ export default function DirectoryCard({ entry }) {
     <Link
       to={`/directory/${entry.id}`}
       className="pcard"
-      aria-label={`${entry.name} — directory entry`}
+      aria-label={`${entry.name} — directory listing`}
     >
-      <Cover hue={hue} label={entry.name} imageUrl={entry.image_url} />
+      <Cover
+        hue={hue}
+        imageUrl={entry.image_url}
+        style={{ height: 150 }}
+        label={undefined}
+      />
       <div className="pcard-body">
-        <div className="pcard-head">
-          <h3 className="pcard-title">{entry.name}</h3>
-          {entry.category && (
-            <span className="chip" style={{ fontSize: 11 }}>{entry.category}</span>
-          )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <span className="badge">{entry.category || 'Other'}</span>
+          <span className="badge badge-accent">Directory</span>
         </div>
-        {entry.tagline && <p className="pcard-tagline">{entry.tagline}</p>}
+        <h3 className="pcard-title">{entry.name}</h3>
+        {entry.wallet_address && (
+          <div className="pcard-creator">
+            <Identicon seed={entry.wallet_address} size={20} />
+            <span className="mono">{shortAddr(entry.wallet_address)}</span>
+          </div>
+        )}
+        <p className="pcard-tag">{entry.tagline || 'A project on Algorand.'}</p>
         {entry.website_url && (
-          <div className="pcard-meta" style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 12.5, color: 'var(--text-faint)', marginTop: 'auto' }}>
             {entry.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
           </div>
         )}
-        <div className="pcard-foot" style={{ fontSize: 12, color: 'var(--text-faint)' }}>
-          by {shortAddr(entry.wallet_address)}
-        </div>
       </div>
     </Link>
   )

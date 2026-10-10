@@ -39,9 +39,9 @@ export default function Directory() {
   const chips = CATEGORIES.filter(c => (catCounts[c] || 0) > 0 || c === filter)
 
   return (
-    <div className="container" style={{ paddingTop: 24, paddingBottom: 64 }}>
+    <section className="section wrap">
       {/* Campaigns | Directory tabs */}
-      <div className="filters" style={{ marginBottom: 20, display: 'flex', gap: 8 }}>
+      <div className="filters" style={{ marginBottom: 20 }}>
         <Link to="/" className="chip">Campaigns</Link>
         <span className="chip active">Directory</span>
       </div>
@@ -75,10 +75,10 @@ export default function Directory() {
         ))}
       </div>
 
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="card" style={{ marginBottom: 16, padding: 14, color: 'var(--danger)', borderColor: 'var(--danger)' }}>{error}</div>}
 
       {loading ? (
-        <div className="grid">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
+        <div className="grid-cards">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
       ) : visible.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
           {entries.length === 0
@@ -86,10 +86,10 @@ export default function Directory() {
             : 'No projects match your filter.'}
         </div>
       ) : (
-        <div className="grid">
+        <div className="grid-cards">
           {visible.map(e => <DirectoryCard key={e.id} entry={e} />)}
         </div>
       )}
-    </div>
+    </section>
   )
 }
