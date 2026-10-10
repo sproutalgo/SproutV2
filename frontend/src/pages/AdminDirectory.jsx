@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useToast } from '../context/ToastContext'
@@ -14,20 +14,35 @@ export default function AdminDirectory() {
   const [actioningId, setActioningId] = useState(null)
   const isAdmin = activeAddress === ADMIN_ADDRESS
 
-  const load = useCallback(async () => {
+  // Load once per admin-address change — NOT on every render. signTransactions
+  // and addToast can be new references each render, so they must NOT be effect
+  // dependencies or the fetch re-runs endlessly (each run prompts a wallet
+  // signature → infinite signing loop). We read them via refs inside the effect.
+  const signRef  = useRef(signTransactions)
+  const toastRef = useRef(addToast)
+  useEffect(() => { signRef.current = signTransactions }, [signTransactions])
+  useEffect(() => { toastRef.current = addToast }, [addToast])
+
+  const reload = useCallback(async () => {
     if (!activeAddress || !isAdmin) { setLoading(false); return }
     setLoading(true)
     try {
-      const list = await fetchPendingDirectoryEntries({ address: activeAddress, signTransactions })
+      const list = await fetchPendingDirectoryEntries({ address: activeAddress, signTransactions: signRef.current })
       setEntries(Array.isArray(list) ? list : [])
     } catch (e) {
-      addToast(e.message || 'Failed to load pending entries', 'error')
+      toastRef.current(e.message || 'Failed to load pending entries', 'error')
     } finally {
       setLoading(false)
     }
-  }, [activeAddress, isAdmin, signTransactions, addToast])
+  }, [activeAddress, isAdmin])
 
-  useEffect(() => { load() }, [load])
+  // Fetch once when the page mounts / the admin address changes. The signature
+  // prompt appears exactly once here, not repeatedly.
+  useEffect(() => {
+    if (!activeAddress || !isAdmin) { setLoading(false); return }
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAddress, isAdmin])
 
   async function review(id, status) {
     setActioningId(id)
