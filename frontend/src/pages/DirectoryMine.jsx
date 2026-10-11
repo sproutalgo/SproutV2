@@ -55,6 +55,9 @@ export default function DirectoryMine() {
                   <span style={{ background: s.bg, color: s.fg, padding: '4px 10px', borderRadius: 'var(--r-sm)', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {s.label}
                   </span>
+                  {(e.status === 'approved' || e.status === 'pending') && (
+                    <Link to={`/directory/${e.id}/edit`} className="btn btn-ghost btn-sm">Edit</Link>
+                  )}
                   {e.status === 'approved' && <Link to={`/directory/${e.id}`} className="btn btn-ghost btn-sm">View</Link>}
                 </div>
               </div>

@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { requireSignatureGeneric, requireAdminGeneric } from '../middleware/auth.js'
 import {
   getApprovedEntries, getEntry, getEntriesByWallet,
-  getPendingEntries, createEntry, setEntryStatus,
+  getPendingEntries, createEntry, updateEntry, setEntryStatus,
 } from '../services/directory.js'
 
 const router = Router()
@@ -60,6 +60,24 @@ router.post('/submit', requireSignatureGeneric, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(400).json({ error: e.message || 'Failed to submit entry' })
+  }
+})
+
+// PATCH /api/directory/:id — edit an existing entry (owner only, signature
+// verified). Ownership is enforced in the service against the verified signer.
+// Any edit resets the entry to 'pending' for re-approval.
+router.patch('/:id', requireSignatureGeneric, async (req, res) => {
+  try {
+    const { name, tagline, description, category, websiteUrl, imageUrl, highlights } = req.body
+    const entry = await updateEntry({
+      id: req.params.id,
+      walletAddress: req.verifiedAddress,
+      name, tagline, description, category, websiteUrl, imageUrl, highlights,
+    })
+    res.json(entry)
+  } catch (e) {
+    console.error(e)
+    res.status(e.status || 400).json({ error: e.message || 'Failed to update entry' })
   }
 })
 

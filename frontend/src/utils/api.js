@@ -249,6 +249,22 @@ export async function submitDirectoryEntry({ address, meta, signTransactions }) 
   }, signTransactions, address)
 }
 
+// Edit an existing entry (owner only, signature verified). Resets it to pending.
+export async function updateDirectoryEntry({ address, id, meta, signTransactions }) {
+  return authFetch(`/directory/${id}`, {
+    method: 'PATCH',
+    body: {
+      name:        meta.name,
+      tagline:     meta.tagline,
+      description: meta.description,
+      category:    meta.category,
+      websiteUrl:  meta.websiteUrl,
+      imageUrl:    meta.imageUrl,
+      highlights:  meta.highlights,
+    },
+  }, signTransactions, address)
+}
+
 // Admin: pending review queue.
 export async function fetchPendingDirectoryEntries({ address, signTransactions }) {
   return authFetch('/directory/admin/pending', { method: 'GET' }, signTransactions, address)

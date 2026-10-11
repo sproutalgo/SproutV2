@@ -73,6 +73,7 @@ export default function App() {
             <Route path="/directory" element={<Directory />} />
             <Route path="/directory/submit" element={<DirectorySubmit />} />
             <Route path="/directory/mine" element={<DirectoryMine />} />
+            <Route path="/directory/:id/edit" element={<DirectorySubmit />} />
             <Route path="/directory/:id" element={<DirectoryEntry />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/directory" element={<AdminDirectory />} />

@@ -94,6 +94,51 @@ export async function createEntry({ walletAddress, name, tagline, description, c
   return data
 }
 
+// Edit an existing entry. OWNERSHIP-CHECKED: only the wallet that created the
+// entry (verified via signature upstream) may edit it. Any edit resets status to
+// 'pending' so the change is re-reviewed before going public again — this closes
+// the bait-and-switch hole where an approved listing could be silently changed.
+export async function updateEntry({ id, walletAddress, name, tagline, description, category, websiteUrl, imageUrl, highlights }) {
+  validateEntry({ name, tagline, description, websiteUrl, highlights, category })
+
+  // Fetch the entry first to verify ownership (service-role read, bypasses RLS).
+  const { data: existing, error: fetchErr } = await supabase
+    .from('directory_entries')
+    .select('wallet_address')
+    .eq('id', id)
+    .single()
+  if (fetchErr) throw fetchErr
+  if (!existing) throw new Error('Entry not found')
+  if (existing.wallet_address !== walletAddress) {
+    const e = new Error('You can only edit your own listings')
+    e.status = 403
+    throw e
+  }
+
+  const { data, error } = await supabase
+    .from('directory_entries')
+    .update({
+      name:         String(name).slice(0, 60),
+      tagline:      String(tagline     || '').slice(0, 120),
+      description:  String(description || '').slice(0, 5000),
+      category:     category ? String(category).slice(0, 60) : null,
+      website_url:  String(websiteUrl  || '').slice(0, 200),
+      image_url:    imageUrl || '',
+      highlights:   Array.isArray(highlights)
+                      ? highlights.slice(0, 3).map(h => String(h || '').slice(0, 500))
+                      : null,
+      status:       'pending',          // edits always re-enter review
+      reviewed_at:  null,
+      reviewed_by:  null,
+      updated_at:   new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 // Admin: approve or reject a pending entry.
 export async function setEntryStatus({ id, status, adminAddress }) {
   if (status !== 'approved' && status !== 'rejected') {

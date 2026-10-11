@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useToast } from '../context/ToastContext'
-import { submitDirectoryEntry } from '../utils/api'
+import { submitDirectoryEntry, updateDirectoryEntry, fetchDirectoryEntry } from '../utils/api'
 import ImageUpload from '../components/ImageUpload'
 
 const CATEGORIES = ['DeFi', 'RWA', 'AI', 'NFT', 'Gaming', 'Infrastructure', 'Social', 'Other']
@@ -18,6 +18,8 @@ function websiteError(url) {
 
 export default function DirectorySubmit() {
   const navigate = useNavigate()
+  const { id } = useParams()            // present when editing an existing listing
+  const isEdit = !!id
   const { activeAddress, signTransactions } = useWallet()
   const { addToast } = useToast()
 
@@ -26,6 +28,32 @@ export default function DirectorySubmit() {
     highlights: ['', '', ''], websiteUrl: '', imageUrl: '',
   })
   const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading]       = useState(isEdit)
+  const [loadError, setLoadError]   = useState(null)
+
+  // In edit mode, load the existing entry to pre-fill the form.
+  useEffect(() => {
+    if (!isEdit) return
+    let cancelled = false
+    setLoading(true)
+    fetchDirectoryEntry(id)
+      .then(entry => {
+        if (cancelled || !entry) return
+        const hi = Array.isArray(entry.highlights) ? entry.highlights.filter(Boolean) : []
+        setForm({
+          name:        entry.name || '',
+          tagline:     entry.tagline || '',
+          description: entry.description || '',
+          category:    entry.category || 'DeFi',
+          highlights:  [hi[0] || '', hi[1] || '', hi[2] || ''],
+          websiteUrl:  entry.website_url || '',
+          imageUrl:    entry.image_url || '',
+        })
+      })
+      .catch(() => { if (!cancelled) setLoadError('Could not load this listing.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [id, isEdit])
 
   const set   = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
   const setHi = (i) => (e) => { const h = [...form.highlights]; h[i] = e.target.value; setForm(f => ({ ...f, highlights: h })) }
@@ -34,45 +62,62 @@ export default function DirectorySubmit() {
   const canSubmit = form.name.trim() && form.tagline.trim() && !urlErr && !submitting
 
   async function handleSubmit() {
-    if (!activeAddress) return addToast('Connect your wallet to submit', 'info')
+    if (!activeAddress) return addToast('Connect your wallet to continue', 'info')
     if (!form.name.trim()) return addToast('Project name is required', 'error')
     if (!form.tagline.trim()) return addToast('Tagline is required', 'error')
     if (urlErr) return addToast(urlErr, 'error')
 
     setSubmitting(true)
+    const meta = {
+      name: form.name, tagline: form.tagline, description: form.description,
+      category: form.category, websiteUrl: form.websiteUrl, imageUrl: form.imageUrl,
+      highlights: form.highlights.filter(h => h.trim()),
+    }
     try {
-      await submitDirectoryEntry({
-        address: activeAddress,
-        signTransactions,
-        meta: {
-          name: form.name, tagline: form.tagline, description: form.description,
-          category: form.category, websiteUrl: form.websiteUrl, imageUrl: form.imageUrl,
-          highlights: form.highlights.filter(h => h.trim()),
-        },
-      })
-      addToast('Submitted! Your listing will appear once an admin approves it.', 'success', 7000)
+      if (isEdit) {
+        await updateDirectoryEntry({ address: activeAddress, id, meta, signTransactions })
+        addToast('Updated! Your edited listing will reappear once an admin re-approves it.', 'success', 8000)
+      } else {
+        await submitDirectoryEntry({ address: activeAddress, meta, signTransactions })
+        addToast('Submitted! Your listing will appear once an admin approves it.', 'success', 7000)
+      }
       navigate('/directory/mine')
     } catch (e) {
-      addToast(e.message || 'Submission failed', 'error', 8000)
+      addToast(e.message || (isEdit ? 'Update failed' : 'Submission failed'), 'error', 8000)
     } finally {
       setSubmitting(false)
     }
   }
 
+  if (loading) {
+    return <section className="section wrap" style={{ maxWidth: 720 }}><div style={{ padding: 40, color: 'var(--text-muted)' }}>Loading…</div></section>
+  }
+  if (loadError) {
+    return (
+      <section className="section wrap" style={{ maxWidth: 720 }}>
+        <Link to="/directory/mine" style={{ color: 'var(--text-muted)' }}>← Back to my listings</Link>
+        <div className="card" style={{ padding: 14, marginTop: 16, color: 'var(--danger)' }}>{loadError}</div>
+      </section>
+    )
+  }
+
   return (
     <section className="section wrap" style={{ maxWidth: 720 }}>
-      <Link to="/directory" style={{ display: 'inline-block', marginBottom: 16, color: 'var(--text-muted)' }}>
-        ← Back to directory
+      <Link to={isEdit ? '/directory/mine' : '/directory'} style={{ display: 'inline-block', marginBottom: 16, color: 'var(--text-muted)' }}>
+        ← {isEdit ? 'Back to my listings' : 'Back to directory'}
       </Link>
-      <h1 style={{ margin: '0 0 6px', fontSize: 28, letterSpacing: '-0.02em' }}>List your project</h1>
+      <h1 style={{ margin: '0 0 6px', fontSize: 28, letterSpacing: '-0.02em' }}>
+        {isEdit ? 'Edit your listing' : 'List your project'}
+      </h1>
       <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15 }}>
-        Free to list. You'll sign with your wallet to prove it's yours — no cost, no transaction fee.
-        Entries are reviewed by an admin before going live.
+        {isEdit
+          ? "You'll sign with your wallet to confirm the change. Edited listings go back to admin review before reappearing publicly."
+          : "Free to list. You'll sign with your wallet to prove it's yours — no cost, no transaction fee. Entries are reviewed by an admin before going live."}
       </p>
 
       {!activeAddress && (
         <div className="card" style={{ padding: 14, marginBottom: 20, color: 'var(--text-muted)', fontSize: 14 }}>
-          Connect your wallet to submit a listing.
+          Connect your wallet to {isEdit ? 'save changes' : 'submit a listing'}.
         </div>
       )}
 
@@ -145,9 +190,9 @@ export default function DirectorySubmit() {
 
       <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
         <button className="btn btn-primary" disabled={!canSubmit} onClick={handleSubmit}>
-          {submitting ? 'Submitting…' : 'Submit listing'}
+          {submitting ? (isEdit ? 'Saving…' : 'Submitting…') : (isEdit ? 'Save changes' : 'Submit listing')}
         </button>
-        <Link to="/directory" className="btn btn-ghost">Cancel</Link>
+        <Link to={isEdit ? '/directory/mine' : '/directory'} className="btn btn-ghost">Cancel</Link>
       </div>
     </section>
   )
