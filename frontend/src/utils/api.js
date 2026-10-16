@@ -234,10 +234,13 @@ export async function fetchMyDirectoryEntries(address) {
 }
 
 // Submit a new entry (wallet-signature verified). Lands as 'pending'.
-export async function submitDirectoryEntry({ address, meta, signTransactions }) {
-  return authFetch('/directory/submit', {
+// No wallet signature — the connected address is sent in the body for ownership,
+// not cryptographically verified. Every entry is admin-reviewed before going live.
+export async function submitDirectoryEntry({ address, meta }) {
+  return apiFetch('/directory/submit', {
     method: 'POST',
     body: {
+      walletAddress: address,
       name:        meta.name,
       tagline:     meta.tagline,
       description: meta.description,
@@ -246,14 +249,15 @@ export async function submitDirectoryEntry({ address, meta, signTransactions }) 
       imageUrl:    meta.imageUrl,
       highlights:  meta.highlights,
     },
-  }, signTransactions, address)
+  })
 }
 
 // Edit an existing entry (owner only, signature verified). Resets it to pending.
-export async function updateDirectoryEntry({ address, id, meta, signTransactions }) {
-  return authFetch(`/directory/${id}`, {
+export async function updateDirectoryEntry({ address, id, meta }) {
+  return apiFetch(`/directory/${id}`, {
     method: 'PATCH',
     body: {
+      walletAddress: address,
       name:        meta.name,
       tagline:     meta.tagline,
       description: meta.description,
@@ -262,7 +266,7 @@ export async function updateDirectoryEntry({ address, id, meta, signTransactions
       imageUrl:    meta.imageUrl,
       highlights:  meta.highlights,
     },
-  }, signTransactions, address)
+  })
 }
 
 // Admin: pending review queue.

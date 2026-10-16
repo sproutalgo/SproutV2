@@ -20,7 +20,7 @@ export default function DirectorySubmit() {
   const navigate = useNavigate()
   const { id } = useParams()            // present when editing an existing listing
   const isEdit = !!id
-  const { activeAddress, signTransactions } = useWallet()
+  const { activeAddress } = useWallet()
   const { addToast } = useToast()
 
   const [form, setForm] = useState({
@@ -75,10 +75,10 @@ export default function DirectorySubmit() {
     }
     try {
       if (isEdit) {
-        await updateDirectoryEntry({ address: activeAddress, id, meta, signTransactions })
+        await updateDirectoryEntry({ address: activeAddress, id, meta })
         addToast('Updated! Your edited listing will reappear once an admin re-approves it.', 'success', 8000)
       } else {
-        await submitDirectoryEntry({ address: activeAddress, meta, signTransactions })
+        await submitDirectoryEntry({ address: activeAddress, meta })
         addToast('Submitted! Your listing will appear once an admin approves it.', 'success', 7000)
       }
       navigate('/directory/mine')
@@ -111,8 +111,8 @@ export default function DirectorySubmit() {
       </h1>
       <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15 }}>
         {isEdit
-          ? "You'll sign with your wallet to confirm the change. Edited listings go back to admin review before reappearing publicly."
-          : "Free to list. You'll sign with your wallet to prove it's yours — no cost, no transaction fee. Entries are reviewed by an admin before going live."}
+          ? "Connect your wallet to confirm the change. Edited listings go back to admin review before reappearing publicly."
+          : "Free to list. Just connect your wallet — no signing, no transaction fee. Entries are reviewed by an admin before going live."}
       </p>
 
       {!activeAddress && (

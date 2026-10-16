@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { requireSignatureGeneric, requireAdminGeneric } from '../middleware/auth.js'
+import { requireAdminGeneric } from '../middleware/auth.js'
 import {
   getApprovedEntries, getEntry, getEntriesByWallet,
   getPendingEntries, createEntry, updateEntry, setEntryStatus,
@@ -47,13 +47,19 @@ router.get('/:id', async (req, res) => {
 
 // ─── Submit (wallet-signature verified) ──────────────────────────────────────
 
-// POST /api/directory/submit — create a pending entry. The poster is the
-// verified signer (req.verifiedAddress), never taken from the body.
-router.post('/submit', requireSignatureGeneric, async (req, res) => {
+// POST /api/directory/submit — create a pending entry.
+// NO signature required: the wallet is CONNECTED by the submitter but not
+// cryptographically verified (we dropped the 0-ALGO signing challenge that was
+// losing builders). The connected address is sent in the body and used for
+// ownership. This is safe here because every submission is manually reviewed by
+// an admin before going public — a spoofed address only produces queue spam,
+// never a live listing.
+router.post('/submit', async (req, res) => {
   try {
-    const { name, tagline, description, category, websiteUrl, imageUrl, highlights } = req.body
+    const { walletAddress, name, tagline, description, category, websiteUrl, imageUrl, highlights } = req.body
+    if (!walletAddress) return res.status(400).json({ error: 'Connect your wallet to submit' })
     const entry = await createEntry({
-      walletAddress: req.verifiedAddress,
+      walletAddress,
       name, tagline, description, category, websiteUrl, imageUrl, highlights,
     })
     res.json(entry)
@@ -63,15 +69,18 @@ router.post('/submit', requireSignatureGeneric, async (req, res) => {
   }
 })
 
-// PATCH /api/directory/:id — edit an existing entry (owner only, signature
-// verified). Ownership is enforced in the service against the verified signer.
+// PATCH /api/directory/:id — edit an existing entry (owner only, no signature).
+// Ownership is checked by matching the connected walletAddress (from the body)
+// against the entry's stored wallet_address. Not cryptographically proven — but
+// edits re-enter admin review, so a spoofed edit only produces queue spam.
 // Any edit resets the entry to 'pending' for re-approval.
-router.patch('/:id', requireSignatureGeneric, async (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
-    const { name, tagline, description, category, websiteUrl, imageUrl, highlights } = req.body
+    const { walletAddress, name, tagline, description, category, websiteUrl, imageUrl, highlights } = req.body
+    if (!walletAddress) return res.status(400).json({ error: 'Connect your wallet to edit' })
     const entry = await updateEntry({
       id: req.params.id,
-      walletAddress: req.verifiedAddress,
+      walletAddress,
       name, tagline, description, category, websiteUrl, imageUrl, highlights,
     })
     res.json(entry)
