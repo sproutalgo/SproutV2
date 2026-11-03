@@ -95,8 +95,11 @@ export default function EscrowBootstrap() {
       setResult(out)
       addToast('Escrow deployed + bootstrapped', 'success', 8000)
     } catch (e) {
-      addToast(e.message || 'Deploy failed', 'error', 10000)
-      setStep(`Failed: ${e.message || e}`)
+      // Coerce to a plain string — algosdk errors can carry non-string fields
+      // (e.g. Address objects) that would crash the render if dropped into JSX.
+      const msg = String(e?.message ?? e ?? 'Deploy failed')
+      addToast(msg, 'error', 10000)
+      setStep(`Failed: ${msg}`)
     } finally {
       setBusy(false)
     }

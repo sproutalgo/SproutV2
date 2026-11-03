@@ -200,5 +200,9 @@ export async function deployAndBootstrap({
   }
 
   onStep('Done.')
-  return { appId, sproutAsaId, appAddress: algosdk.getApplicationAddress(appId) }
+  // getApplicationAddress returns an Address OBJECT in newer algosdk (a string in
+  // older). Coerce to a plain string so the UI can render it. String(addr) yields
+  // the base32 address for an Address object; .toString() also works.
+  const appAddress = String(algosdk.getApplicationAddress(appId))
+  return { appId, sproutAsaId, appAddress }
 }
