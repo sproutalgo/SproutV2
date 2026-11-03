@@ -12,9 +12,10 @@ import algosdk from 'algosdk'
 import { algodClient } from './algorand'
 import escrowArc56 from '../../../contracts/StakingEscrow.arc56.json'
 
-const ESCROW_APP_ID = Number(import.meta.env.VITE_ESCROW_APP_ID || 0)
-const SPROUT_ASA_ID = Number(import.meta.env.VITE_SPROUT_ASA_ID || 0)
-const SUPPLY_BASE   = 10_000_000_000_000_000 // 10B * 1e6
+const ESCROW_APP_ID  = Number(import.meta.env.VITE_ESCROW_APP_ID || 0)
+const SPROUT_ASA_ID  = Number(import.meta.env.VITE_SPROUT_ASA_ID || 0)
+const SUPPLY_BASE    = 10_000_000_000_000_000 // 10B * 1e6
+const HARVEST_BUFFER = 1_000_000              // must match the contract's HARVEST_BUFFER (1 ALGO)
 
 const CONTRACT = new algosdk.ABIContract({ name: escrowArc56.name, methods: escrowArc56.methods })
 const TXN_ARG_TYPES = new Set(['pay', 'axfer', 'appl', 'keyreg', 'acfg', 'afrz'])
@@ -119,6 +120,21 @@ export async function withdraw({ signTransactions, address, microSprout }) {
   return signSend(signTransactions, [axfer, appCall], appCall.txID())
 }
 
+// ─── Harvest — permissionless. Sweeps surplus (balance − principal − mbr − buffer)
+//     to the pinned pool address. Does NOT touch the ASA, so it works regardless of
+//     the ASA's manager. Caller pays the inner payment fee. ──────────────────────
+
+export async function harvest({ signTransactions, address }) {
+  const m = method('harvest')
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address,
+    suggestedParams: await getSp(2000), // covers the inner payment (fee:0)
+    appIndex: ESCROW_APP_ID,
+    appArgs: buildAppArgs(m, []),
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
 // The caller's Sprout balance == their withdrawable principal (1 Sprout = 1 microAlgo).
@@ -145,7 +161,9 @@ export async function fetchEscrowStats() {
     if (Number(pick(a, 'asset-id', 'assetId')) === SPROUT_ASA_ID) held = Number(pick(a, 'amount'))
   }
   const principal = SUPPLY_BASE - held
-  const surplus = Math.max(0, bal - principal - mbr)
+  // Mirror the contract's harvest floor EXACTLY: principal + live MBR + buffer.
+  // (Earlier this omitted the buffer, overstating harvestable surplus by 1 ALGO.)
+  const surplus = Math.max(0, bal - principal - mbr - HARVEST_BUFFER)
   return { balanceMicro: bal, principalMicro: principal, surplusMicro: surplus, mbrMicro: mbr }
 }
 

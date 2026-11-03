@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useToast } from '../context/ToastContext'
 import {
-  optInSprout, deposit, withdraw,
+  optInSprout, deposit, withdraw, harvest,
   fetchMyPosition, fetchEscrowStats, IDS,
 } from '../utils/stakingChain'
 
@@ -72,6 +72,9 @@ export default function Stake() {
     if (pos && amountMicro > pos.principalMicro) throw new Error('More than your staked principal')
     return withdraw({ signTransactions, address: activeAddress, microSprout: amountMicro })
   })
+  const onHarvest = () => run('harvest', () =>
+    harvest({ signTransactions, address: activeAddress })
+  )
   const setMax = () => setAmount(pos ? String(pos.principalMicro / MICRO) : '')
 
   if (loading) {
@@ -147,6 +150,15 @@ export default function Stake() {
               {busy === 'withdraw' ? 'Withdrawing…' : 'Withdraw principal'}
             </button>
             <button className="btn btn-ghost" disabled={!!busy} onClick={load}>Refresh</button>
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4 }}>
+            <button className="btn btn-ghost" disabled={!!busy} onClick={onHarvest}>
+              {busy === 'harvest' ? 'Harvesting…' : `Harvest yield → pool (${toAlgo(stats?.surplusMicro)} ALGO)`}
+            </button>
+            <span className="field-hint" style={{ display: 'block', marginTop: 4 }}>
+              Permissionless. Sweeps surplus (balance − principal − MBR − 1 ALGO buffer) to the pool wallet.
+            </span>
           </div>
         </div>
       </div>
