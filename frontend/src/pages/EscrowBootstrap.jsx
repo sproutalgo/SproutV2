@@ -12,7 +12,7 @@
 // where the app can GET them (public/ or your static host), or import them if you
 // prefer bundling. See the README.
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import { algodClient, ADMIN_ADDRESS } from '../utils/algorand'
@@ -54,6 +54,13 @@ export default function EscrowBootstrap() {
 
   const [adminAddress, setAdminAddress] = useState('')
   const [poolAddress, setPoolAddress] = useState('')
+
+  // Default the admin to the connected wallet — that's the common case (admin =
+  // you). Only prefill while the field is still empty, so it never overwrites an
+  // address you've deliberately typed (e.g. a multisig). Editable either way.
+  useEffect(() => {
+    if (activeAddress) setAdminAddress(prev => (prev === '' ? activeAddress : prev))
+  }, [activeAddress])
   const [fundAlgo, setFundAlgo] = useState('2')
   const [step, setStep] = useState('')
   const [busy, setBusy] = useState(false)
@@ -161,8 +168,16 @@ export default function EscrowBootstrap() {
             <input id="admin" className="input" placeholder="multisig or single address"
               value={adminAddress} onChange={e => setAdminAddress(e.target.value.trim())} />
             <span className="field-hint" style={{ color: adminAddress && !isAddr(adminAddress) ? 'var(--danger)' : 'var(--text-faint)' }}>
-              {adminAddress && !isAddr(adminAddress) ? 'Not a valid Algorand address' : 'Controls pause + keyreg. Can never be changed. A multisig is recommended.'}
+              {adminAddress && !isAddr(adminAddress)
+                ? 'Not a valid Algorand address'
+                : 'Defaults to your connected wallet. Controls pause + keyreg, can never be changed — use a multisig if you want key-loss protection.'}
             </span>
+            {activeAddress && adminAddress !== activeAddress && (
+              <button type="button" className="btn btn-ghost" style={{ marginTop: 6, fontSize: 13 }}
+                onClick={() => setAdminAddress(activeAddress)}>
+                Use connected wallet
+              </button>
+            )}
           </div>
 
           <div className="field">
