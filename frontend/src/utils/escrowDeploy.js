@@ -111,14 +111,15 @@ export async function buildBootstrapTxn({ sender, appId, adminAddress, poolAddre
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// admin_close — SAFE teardown. Destroys the Sprout ASA, sends all remaining ALGO
-// to admin, and deletes the app. Only succeeds when accounted_principal == 0 (all
-// Sprout burned back) and the account is offline. This is a DeleteApplication call.
+// admin_close — SAFE teardown. Destroys the Sprout ASA (the app is its manager),
+// sends all remaining ALGO to admin, and deletes the app. Only succeeds when
+// accounted_principal == 0 and the account is offline. DeleteApplication call.
 //
-// Fee 3000 covers the two pooled inner txns (ASA destroy + close payment), both
-// fee:0. The Sprout ASA goes in foreignAssets so the destroy reference resolves.
+// Fee 3000 covers the two pooled inner txns (ASA destroy + payment-close), both
+// fee:0. Resource refs required: the Sprout ASA in foreignAssets (balance read +
+// destroy) AND the admin address in accounts (the inner payment sends to it).
 // ─────────────────────────────────────────────────────────────────────────────
-export async function buildCloseTxn({ sender, appId, sproutAsaId }) {
+export async function buildCloseTxn({ sender, appId, sproutAsaId, adminAddress }) {
   const sp = await getSp(3000)
   const m = method('admin_close')
   const appArgs = buildAppArgs(m, []) // no non-txn args
@@ -128,13 +129,16 @@ export async function buildCloseTxn({ sender, appId, sproutAsaId }) {
     appIndex: Number(appId),
     appArgs,
     foreignAssets: [Number(sproutAsaId)],
+    accounts: adminAddress ? [adminAddress] : undefined, // inner txns pay the admin
   })
   return { txn, txId: txn.txID() }
 }
 
 // Run the close: sign + send + confirm. Returns the confirmation.
-export async function closeEscrow({ signTransactions, sender, appId, sproutAsaId }) {
-  const { txn, txId } = await buildCloseTxn({ sender, appId, sproutAsaId })
+// adminAddress defaults to the sender (the admin runs the close), but can be passed
+// explicitly if the admin differs from the connected wallet.
+export async function closeEscrow({ signTransactions, sender, appId, sproutAsaId, adminAddress }) {
+  const { txn, txId } = await buildCloseTxn({ sender, appId, sproutAsaId, adminAddress: adminAddress || sender })
   const [signed] = await signTransactions([algosdk.encodeUnsignedTransaction(txn)])
   return sendAndConfirm([signed], txId)
 }

@@ -156,16 +156,33 @@ class StakingEscrow(ARC4Contract):
         assert admin.native != Global.zero_address, "admin cannot be zero"
         assert pool_addr.native != Global.zero_address, "pool address cannot be zero"
  
-        # H1: Create a TRULY immutable, non-custodial token. manager, reserve,
-        # freeze and clawback are ALL left as the zero address (the default when
-        # omitted), so supply can never be minted, reconfigured, frozen, or seized.
-        # This is what makes accounted_principal = SUPPLY_BASE - sprout_held correct
-        # by construction for the life of the contract.
+        # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
+        # address — permanently (a role zeroed at creation is irreversibly locked on
+        # Algorand). So supply can never be minted beyond the fixed total, no account
+        # can be frozen, and no tokens can be seized — by ANYONE, including this
+        # contract or its manager. These are the depositor-protecting properties, and
+        # they make accounted_principal = SUPPLY - sprout_held correct by construction.
+        #
+        # manager IS set — to the ESCROW APP ITSELF (no private key). Why it's needed
+        # and why it's safe:
+        #   * NEEDED: the app is the ASA creator, and a creator account cannot close
+        #     while its asset exists; the asset can only be shed by DESTROYING it, and
+        #     destroy requires the manager. Without a manager, admin_close can never
+        #     fully close the account — the MBR would strand (this is the exact dead-
+        #     lock hit on the first live deploy, pc=860).
+        #   * SAFE: the manager is an account with no key; it can only act when THIS
+        #     contract's code issues an AssetConfig, which happens in exactly two
+        #     places — bootstrap (one-time create) and admin_close (destroy, gated on
+        #     principal==0 + admin). The contract is non-upgradable, so no other
+        #     AssetConfig path can ever be added. The manager power (reconfigure/
+        #     destroy) is therefore unreachable except via those two gated paths, and
+        #     the dangerous powers (freeze/clawback) are locked off above regardless.
         created = itxn.AssetConfig(
             total=SUPPLY_BASE,
             decimals=6,
             unit_name=b"SPRT",
             asset_name=b"Sprout",
+            manager=Global.current_application_address,
             default_frozen=False,
             fee=0,
         ).submit()
@@ -249,13 +266,20 @@ class StakingEscrow(ARC4Contract):
  
         n = axfer.asset_amount
         assert n > 0, "zero withdraw"
- 
-        # Cannot withdraw more principal than exists on the books.
-        principal = self._accounted_principal()
-        # `principal` already reflects the just-received Sprout (balance updated in-group),
-        # so n <= principal holds by construction; assert defensively anyway.
-        assert n <= principal, "exceeds principal"
- 
+
+        # NOTE: we deliberately do NOT assert `n <= accounted_principal` here.
+        # By the time this call body runs, the axfer has ALREADY landed (it precedes
+        # this call in the group), so accounted_principal = SUPPLY - sprout_held
+        # already reflects the returned Sprout. On a full withdrawal that returns a
+        # holder's entire balance, accounted_principal reads 0 while n is their whole
+        # amount — an `n <= principal` check would wrongly revert the legitimate
+        # "withdraw everything" case (observed on-chain: pc=529 assert fail).
+        #
+        # No such check is needed: n is bounded by the Sprout the caller actually
+        # sent, the ASA transfer itself prevents sending more than they hold, and
+        # every Sprout was minted 1:1 against a real ALGO deposit. So n can never
+        # exceed the ALGO the contract owes. The real guard is the min-balance check
+        # below, which prevents paying out more ALGO than the account can spend.
         algo_out = n  # I4: FLAT 1:1. Never n * balance / circulating.
  
         # I5: paying out must not drop the account below its live minimum balance.
@@ -418,9 +442,13 @@ class StakingEscrow(ARC4Contract):
         # registered for consensus.
         assert self.is_online == 0, "go offline before closing"
 
-        # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
-        # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
-        # the holding, which is required before the account can fully close.
+        # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
+        # supply (guaranteed by principal == 0 above), so this destroy is authorized
+        # and valid. Destroying it is what lets the CREATOR account (the app) shed the
+        # asset — a creator cannot close while its asset exists, and cannot shed it
+        # any other way. This drops the per-ASA MBR so the account can fully close.
+        # (An AssetConfig with only config_asset set and no new roles is the destroy
+        # op; the inner txn sender is the app account = the manager.)
         itxn.AssetConfig(
             config_asset=self.sprout_asa_id,
             fee=0,
