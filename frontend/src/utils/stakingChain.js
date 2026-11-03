@@ -127,14 +127,35 @@ export async function withdraw({ signTransactions, address, microSprout }) {
 //     (asset_holding_get), or the call reverts "unavailable Asset". Caller pays the
 //     inner payment fee. ──────────────────────────────────────────────────────────
 
+// Read the pinned pool address from the app's global state (funding_pool_addr).
+export async function fetchPoolAddress() {
+  const appInfo = await algodClient.getApplicationByID(ESCROW_APP_ID).do()
+  const gs = pick(appInfo?.params, 'global-state', 'globalState') || []
+  for (const kv of gs) {
+    const key = atob(pick(kv, 'key'))
+    if (key === 'funding_pool_addr') {
+      const valB64 = pick(kv.value, 'bytes')
+      const bytes = Uint8Array.from(atob(valB64), c => c.charCodeAt(0))
+      return algosdk.encodeAddress(bytes)
+    }
+  }
+  return null
+}
+
 export async function harvest({ signTransactions, address }) {
+  // The inner payment goes to the pinned pool address, which must be declared as
+  // an available ACCOUNT resource or the call reverts "unavailable Account".
+  const pool = await fetchPoolAddress()
+  if (!pool) throw new Error('Could not read pool address from the contract')
+
   const m = method('harvest')
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address,
     suggestedParams: await getSp(2000), // covers the inner payment (fee:0)
     appIndex: ESCROW_APP_ID,
     appArgs: buildAppArgs(m, []),
-    foreignAssets: [SPROUT_ASA_ID],     // required: harvest reads the app's Sprout balance
+    foreignAssets: [SPROUT_ASA_ID],     // harvest reads the app's Sprout balance
+    accounts: [pool],                   // harvest pays the pool via inner payment
   })
   return signSend(signTransactions, [appCall], appCall.txID())
 }
