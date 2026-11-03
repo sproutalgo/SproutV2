@@ -58,12 +58,12 @@ main_after_if_else@2:
     // staking_escrow.py:60
     // class StakingEscrow(ARC4Contract):
     txn NumAppArgs
-    bz main___algopy_default_create@21
-    pushbytes 0x1cc8c403 // method "admin_close()void"
+    bz main___algopy_default_create@22
+    pushbytess 0x7883ad68 0x1cc8c403 // method "discard_unbootstrapped()void", method "admin_close()void"
     txna ApplicationArgs 0
-    match main_admin_close_route@5
+    match main_discard_unbootstrapped_route@5 main_admin_close_route@6
 
-main_switch_case_next@6:
+main_switch_case_next@7:
     // staking_escrow.py:60
     // class StakingEscrow(ARC4Contract):
     txn OnCompletion
@@ -76,8 +76,8 @@ main_switch_case_next@6:
     match bootstrap set_pause deposit withdraw harvest go_online go_offline get_principal get_surplus get_state
     err
 
-main_admin_close_route@5:
-    // staking_escrow.py:366
+main_admin_close_route@6:
+    // staking_escrow.py:393
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -87,7 +87,18 @@ main_admin_close_route@5:
     assert
     b admin_close
 
-main___algopy_default_create@21:
+main_discard_unbootstrapped_route@5:
+    // staking_escrow.py:366
+    // @abimethod(allow_actions=["DeleteApplication"])
+    txn OnCompletion
+    pushint 5 // DeleteApplication
+    ==
+    txn ApplicationID
+    &&
+    assert
+    b discard_unbootstrapped
+
+main___algopy_default_create@22:
     txn OnCompletion
     !
     txn ApplicationID
@@ -790,114 +801,58 @@ go_offline:
     return
 
 
-// staking_escrow.StakingEscrow.admin_close[routing]() -> void:
-admin_close:
+// staking_escrow.StakingEscrow.discard_unbootstrapped[routing]() -> void:
+discard_unbootstrapped:
+    // staking_escrow.py:382
+    // assert Txn.sender == Global.creator_address, "creator only"
+    txn Sender
+    global CreatorAddress
+    ==
+    assert // creator only
     // staking_escrow.py:383
-    // self._assert_admin()
-    callsub _assert_admin
-    // staking_escrow.py:384
-    // assert self.sprout_asa_id != 0, "not bootstrapped"
+    // assert self.sprout_asa_id == 0, "already bootstrapped: use admin_close"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    assert // not bootstrapped
-    // staking_escrow.py:386-388
-    // # SAFETY GATE: all Sprout must be back in the contract (principal fully
-    // # redeemed). Equivalent to sprout_held == SUPPLY_BASE.
-    // assert self._accounted_principal() == 0, "principal outstanding: depositors still owed"
-    callsub _accounted_principal
     !
-    assert // principal outstanding: depositors still owed
-    // staking_escrow.py:390-392
-    // # Must be OFFLINE before closing — never tear down an account that is still
-    // # registered for consensus.
-    // assert self.is_online == 0, "go offline before closing"
-    intc_0 // 0
-    bytec 4 // "is_online"
-    app_global_get_ex
-    assert // check self.is_online exists
-    !
-    assert // go offline before closing
-    // staking_escrow.py:394-400
-    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
-    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
-    // # the holding, which is required before the account can fully close.
-    // itxn.AssetConfig(
-    //     config_asset=self.sprout_asa_id,
-    //     fee=0,
-    // ).submit()
-    itxn_begin
-    // staking_escrow.py:398
-    // config_asset=self.sprout_asa_id,
-    intc_0 // 0
-    bytec_0 // "sprout_asa_id"
-    app_global_get_ex
-    assert // check self.sprout_asa_id exists
-    itxn_field ConfigAsset
-    // staking_escrow.py:394-397
-    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
-    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
-    // # the holding, which is required before the account can fully close.
-    // itxn.AssetConfig(
-    pushint 3 // acfg
-    itxn_field TypeEnum
-    // staking_escrow.py:399
-    // fee=0,
-    intc_0 // 0
-    itxn_field Fee
-    // staking_escrow.py:394-400
-    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
-    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
-    // # the holding, which is required before the account can fully close.
-    // itxn.AssetConfig(
-    //     config_asset=self.sprout_asa_id,
-    //     fee=0,
-    // ).submit()
-    itxn_submit
-    // staking_escrow.py:402-410
-    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
-    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
-    // # to the admin in one step.
+    assert // already bootstrapped: use admin_close
+    // staking_escrow.py:385-391
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
-    //     receiver=self.admin,
+    //     receiver=Global.creator_address,
     //     amount=0,
-    //     close_remainder_to=self.admin,
+    //     close_remainder_to=Global.creator_address,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // staking_escrow.py:406
-    // receiver=self.admin,
-    intc_0 // 0
-    bytec_3 // "admin"
-    app_global_get_ex
-    assert // check self.admin exists
+    // staking_escrow.py:387
+    // receiver=Global.creator_address,
+    global CreatorAddress
+    // staking_escrow.py:389
+    // close_remainder_to=Global.creator_address,
     dup
     itxn_field CloseRemainderTo
-    // staking_escrow.py:407
+    // staking_escrow.py:388
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // staking_escrow.py:402-405
-    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
-    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
-    // # to the admin in one step.
+    // staking_escrow.py:385-386
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // staking_escrow.py:409
+    // staking_escrow.py:390
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // staking_escrow.py:402-410
-    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
-    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
-    // # to the admin in one step.
+    // staking_escrow.py:385-391
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
-    //     receiver=self.admin,
+    //     receiver=Global.creator_address,
     //     amount=0,
-    //     close_remainder_to=self.admin,
+    //     close_remainder_to=Global.creator_address,
     //     fee=0,
     // ).submit()
     itxn_submit
@@ -907,12 +862,129 @@ admin_close:
     return
 
 
+// staking_escrow.StakingEscrow.admin_close[routing]() -> void:
+admin_close:
+    // staking_escrow.py:410
+    // self._assert_admin()
+    callsub _assert_admin
+    // staking_escrow.py:411
+    // assert self.sprout_asa_id != 0, "not bootstrapped"
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    assert // not bootstrapped
+    // staking_escrow.py:413-415
+    // # SAFETY GATE: all Sprout must be back in the contract (principal fully
+    // # redeemed). Equivalent to sprout_held == SUPPLY_BASE.
+    // assert self._accounted_principal() == 0, "principal outstanding: depositors still owed"
+    callsub _accounted_principal
+    !
+    assert // principal outstanding: depositors still owed
+    // staking_escrow.py:417-419
+    // # Must be OFFLINE before closing — never tear down an account that is still
+    // # registered for consensus.
+    // assert self.is_online == 0, "go offline before closing"
+    intc_0 // 0
+    bytec 4 // "is_online"
+    app_global_get_ex
+    assert // check self.is_online exists
+    !
+    assert // go offline before closing
+    // staking_escrow.py:421-427
+    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
+    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
+    // # the holding, which is required before the account can fully close.
+    // itxn.AssetConfig(
+    //     config_asset=self.sprout_asa_id,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // staking_escrow.py:425
+    // config_asset=self.sprout_asa_id,
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    itxn_field ConfigAsset
+    // staking_escrow.py:421-424
+    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
+    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
+    // # the holding, which is required before the account can fully close.
+    // itxn.AssetConfig(
+    pushint 3 // acfg
+    itxn_field TypeEnum
+    // staking_escrow.py:426
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // staking_escrow.py:421-427
+    // # 1) Destroy the Sprout ASA. The app is the ASA creator and now holds 100%
+    // # of supply, so destroy is permitted. This drops the per-ASA MBR and clears
+    // # the holding, which is required before the account can fully close.
+    // itxn.AssetConfig(
+    //     config_asset=self.sprout_asa_id,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // staking_escrow.py:429-437
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
+    // itxn.Payment(
+    //     receiver=self.admin,
+    //     amount=0,
+    //     close_remainder_to=self.admin,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // staking_escrow.py:433
+    // receiver=self.admin,
+    intc_0 // 0
+    bytec_3 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    dup
+    itxn_field CloseRemainderTo
+    // staking_escrow.py:434
+    // amount=0,
+    intc_0 // 0
+    itxn_field Amount
+    itxn_field Receiver
+    // staking_escrow.py:429-432
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    // staking_escrow.py:436
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // staking_escrow.py:429-437
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
+    // itxn.Payment(
+    //     receiver=self.admin,
+    //     amount=0,
+    //     close_remainder_to=self.admin,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // staking_escrow.py:393
+    // @abimethod(allow_actions=["DeleteApplication"])
+    intc_1 // 1
+    return
+
+
 // staking_escrow.StakingEscrow.get_principal[routing]() -> void:
 get_principal:
-    // staking_escrow.py:426
+    // staking_escrow.py:453
     // return self._accounted_principal()
     callsub _accounted_principal
-    // staking_escrow.py:424
+    // staking_escrow.py:451
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -925,7 +997,7 @@ get_principal:
 
 // staking_escrow.StakingEscrow.get_surplus[routing]() -> void:
 get_surplus:
-    // staking_escrow.py:430-432
+    // staking_escrow.py:457-459
     // # Mirrors harvest's floor exactly (principal + mbr + buffer) so the UI
     // # never shows harvestable surplus that harvest would refuse.
     // app_bal = Global.current_application_address.balance
@@ -935,22 +1007,22 @@ get_surplus:
     dup
     uncover 2
     assert // account funded
-    // staking_escrow.py:433
+    // staking_escrow.py:460
     // floor = self._harvest_floor()
     callsub _harvest_floor
     dup
     cover 2
-    // staking_escrow.py:434
+    // staking_escrow.py:461
     // if app_bal <= floor:
     <=
     bz get_surplus_after_if_else@3
     popn 2
-    // staking_escrow.py:435
+    // staking_escrow.py:462
     // return UInt64(0)
     intc_0 // 0
 
 get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4:
-    // staking_escrow.py:428
+    // staking_escrow.py:455
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -961,24 +1033,24 @@ get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4:
     return
 
 get_surplus_after_if_else@3:
-    // staking_escrow.py:436
+    // staking_escrow.py:463
     // return app_bal - floor
     -
-    // staking_escrow.py:428
+    // staking_escrow.py:455
     // @abimethod(readonly=True)
     b get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4
 
 
 // staking_escrow.StakingEscrow.get_state[routing]() -> void:
 get_state:
-    // staking_escrow.py:440-441
+    // staking_escrow.py:467-468
     // # Returns sprout_asa_id for convenience (0 if not bootstrapped).
     // return self.sprout_asa_id
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // staking_escrow.py:438
+    // staking_escrow.py:465
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75

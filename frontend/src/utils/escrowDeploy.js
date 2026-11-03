@@ -28,6 +28,16 @@ async function getSp(fee = 1000) {
   return { ...sp, flatFee: true, fee }
 }
 
+// Read the first present key from an object — algosdk pending-txn responses use
+// hyphenated keys on older versions and camelCase on newer ones, so we accept both.
+function pick(obj, ...keys) {
+  if (!obj) return undefined
+  for (const k of keys) {
+    if (obj[k] !== undefined && obj[k] !== null) return obj[k]
+  }
+  return undefined
+}
+
 function method(name) {
   return CONTRACT.getMethodByName(name)
 }
@@ -146,7 +156,9 @@ export async function deployAndBootstrap({
   const create = await buildCreateEscrowTxn({ sender, approvalProgram, clearProgram })
   const [sc] = await signTransactions([algosdk.encodeUnsignedTransaction(create.txn)])
   const createRes = await sendAndConfirm([sc], create.txId)
-  const appId = Number(createRes['application-index'])
+  // algosdk returns this as 'application-index' (older) or 'applicationIndex'
+  // (newer, camelCase). Read whichever is present.
+  const appId = Number(pick(createRes, 'application-index', 'applicationIndex'))
   if (!appId) throw new Error('Could not read new app id from create confirmation')
 
   // 2) Fund the app account.
@@ -162,20 +174,25 @@ export async function deployAndBootstrap({
   const bootRes = await sendAndConfirm([sb], boot.txId)
 
   // The Sprout ASA is created as an INNER transaction of bootstrap. Read its id
-  // from the inner-txn results of the confirmation.
+  // from the inner-txn results of the confirmation (handle both key styles).
   let sproutAsaId = null
-  const inner = bootRes['inner-txns'] || []
+  const inner = pick(bootRes, 'inner-txns', 'innerTxns') || []
   for (const itx of inner) {
-    if (itx['asset-index']) { sproutAsaId = Number(itx['asset-index']); break }
-    if (itx['created-asset-index']) { sproutAsaId = Number(itx['created-asset-index']); break }
+    const aidx = pick(itx, 'asset-index', 'assetIndex')
+    const caidx = pick(itx, 'created-asset-index', 'createdAssetIndex')
+    if (aidx) { sproutAsaId = Number(aidx); break }
+    if (caidx) { sproutAsaId = Number(caidx); break }
   }
   // Fallback: the ABI return value of bootstrap is the ASA id (uint64).
-  if (!sproutAsaId && bootRes['logs']) {
+  const logs = pick(bootRes, 'logs')
+  if (!sproutAsaId && logs && logs.length) {
     // ARC-4 return is logged with the 0x151f7c75 return prefix; last 8 bytes = uint64.
     try {
-      const log = bootRes['logs'][bootRes['logs'].length - 1]
-      const bytes = Uint8Array.from(atob(log), c => c.charCodeAt(0))
-      if (bytes.length >= 12) {
+      const log = logs[logs.length - 1]
+      const bytes = typeof log === 'string'
+        ? Uint8Array.from(atob(log), c => c.charCodeAt(0))
+        : new Uint8Array(log)
+      if (bytes.length >= 8) {
         const dv = new DataView(bytes.buffer, bytes.byteLength - 8, 8)
         sproutAsaId = Number(dv.getBigUint64(0))
       }

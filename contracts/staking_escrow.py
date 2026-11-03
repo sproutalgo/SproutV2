@@ -364,6 +364,33 @@ class StakingEscrow(ARC4Contract):
     # ──────────────────────────────────────────────────────────────────────
 
     @abimethod(allow_actions=["DeleteApplication"])
+    def discard_unbootstrapped(self) -> None:
+        """Delete an app that was CREATED but never bootstrapped (creator-only).
+
+        Guards the "created but not bootstrapped → stuck forever" trap: before
+        bootstrap, admin is the zero address, so admin_close's admin check can
+        never pass and the app would otherwise be un-deletable, locking 0.1 ALGO
+        of the creator's min-balance permanently. This lets the original creator
+        tear down such an empty shell.
+
+        Strictly limited to the pre-bootstrap state: it asserts sprout_asa_id == 0,
+        so it can NEVER run on a live escrow holding depositor funds. Once
+        bootstrapped, only admin_close (with its principal==0 gate) can delete.
+        No ASA to destroy and the account holds no principal, so it just closes any
+        residual ALGO back to the creator and lets the delete proceed.
+        """
+        assert Txn.sender == Global.creator_address, "creator only"
+        assert self.sprout_asa_id == 0, "already bootstrapped: use admin_close"
+
+        # Return any stray ALGO in the app account to the creator and zero it.
+        itxn.Payment(
+            receiver=Global.creator_address,
+            amount=0,
+            close_remainder_to=Global.creator_address,
+            fee=0,
+        ).submit()
+
+    @abimethod(allow_actions=["DeleteApplication"])
     def admin_close(self) -> None:
         """Destroy the ASA, send all remaining ALGO to admin, and delete the app.
 
