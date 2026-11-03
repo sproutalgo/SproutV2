@@ -121,8 +121,11 @@ export async function withdraw({ signTransactions, address, microSprout }) {
 }
 
 // ─── Harvest — permissionless. Sweeps surplus (balance − principal − mbr − buffer)
-//     to the pinned pool address. Does NOT touch the ASA, so it works regardless of
-//     the ASA's manager. Caller pays the inner payment fee. ──────────────────────
+//     to the pinned pool address. It READS the ASA holding (to compute principal)
+//     but never transfers or destroys it, so it works regardless of the ASA's
+//     manager. The ASA must be in foreignAssets for that balance read to resolve
+//     (asset_holding_get), or the call reverts "unavailable Asset". Caller pays the
+//     inner payment fee. ──────────────────────────────────────────────────────────
 
 export async function harvest({ signTransactions, address }) {
   const m = method('harvest')
@@ -131,6 +134,7 @@ export async function harvest({ signTransactions, address }) {
     suggestedParams: await getSp(2000), // covers the inner payment (fee:0)
     appIndex: ESCROW_APP_ID,
     appArgs: buildAppArgs(m, []),
+    foreignAssets: [SPROUT_ASA_ID],     // required: harvest reads the app's Sprout balance
   })
   return signSend(signTransactions, [appCall], appCall.txID())
 }
