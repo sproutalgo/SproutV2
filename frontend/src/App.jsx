@@ -20,6 +20,7 @@ import DirectorySubmit from './pages/DirectorySubmit'
 import DirectoryEntry  from './pages/DirectoryEntry'
 import DirectoryMine   from './pages/DirectoryMine'
 import AdminDirectory  from './pages/AdminDirectory'
+import EscrowBootstrap from './pages/EscrowBootstrap'
 
 /**
  * Maintenance gate. When VITE_MAINTENANCE === 'true' the public sees ComingSoon.
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/directory/:id" element={<DirectoryEntry />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/directory" element={<AdminDirectory />} />
+            <Route path="/admin/escrow" element={<EscrowBootstrap />} />
             <Route path="/cleanup" element={<CleanupWallet />} />
             <Route path="/faq"     element={<FAQ />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
