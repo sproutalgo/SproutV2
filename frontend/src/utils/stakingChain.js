@@ -127,26 +127,47 @@ export async function withdraw({ signTransactions, address, microSprout }) {
 //     (asset_holding_get), or the call reverts "unavailable Asset". Caller pays the
 //     inner payment fee. ──────────────────────────────────────────────────────────
 
+// Coerce a value that may be a base64 string OR a Uint8Array (algosdk differs by
+// version) into a Uint8Array.
+function toBytes(v) {
+  if (v == null) return new Uint8Array()
+  if (v instanceof Uint8Array) return v
+  if (Array.isArray(v)) return Uint8Array.from(v)
+  if (typeof v === 'string') {
+    // base64 → bytes
+    try { return Uint8Array.from(atob(v), c => c.charCodeAt(0)) } catch { /* fall through */ }
+  }
+  return new Uint8Array()
+}
+
+function bytesToStr(v) {
+  return new TextDecoder().decode(toBytes(v))
+}
+
 // Read the pinned pool address from the app's global state (funding_pool_addr).
 export async function fetchPoolAddress() {
   const appInfo = await algodClient.getApplicationByID(ESCROW_APP_ID).do()
   const gs = pick(appInfo?.params, 'global-state', 'globalState') || []
   for (const kv of gs) {
-    const key = atob(pick(kv, 'key'))
+    const key = bytesToStr(pick(kv, 'key'))
     if (key === 'funding_pool_addr') {
-      const valB64 = pick(kv.value, 'bytes')
-      const bytes = Uint8Array.from(atob(valB64), c => c.charCodeAt(0))
-      return algosdk.encodeAddress(bytes)
+      const raw = pick(kv.value, 'bytes')
+      const bytes = toBytes(raw)
+      if (bytes.length === 32) return algosdk.encodeAddress(bytes)
     }
   }
   return null
 }
 
-export async function harvest({ signTransactions, address }) {
+export async function harvest({ signTransactions, address, poolAddress }) {
   // The inner payment goes to the pinned pool address, which must be declared as
   // an available ACCOUNT resource or the call reverts "unavailable Account".
-  const pool = await fetchPoolAddress()
-  if (!pool) throw new Error('Could not read pool address from the contract')
+  // Prefer an explicitly-passed poolAddress (or VITE_POOL_ADDRESS); otherwise read
+  // it from the contract's global state.
+  const pool = poolAddress
+    || import.meta.env.VITE_POOL_ADDRESS
+    || await fetchPoolAddress()
+  if (!pool) throw new Error('Could not determine pool address')
 
   const m = method('harvest')
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
