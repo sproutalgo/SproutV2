@@ -3,90 +3,81 @@
 
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
-    intcblock 0 1 8 32
-    bytecblock 0x763a "epoch_id" 0x151f7c75 "phase" 0x633a "sprout_asa_id" "candidate_count" "bootstrapped" "admin" "vote_open" "pool_micro" "vote_close" "tally_round" "escrow_app"
+    intcblock 0 1 2 32 10000000000000000
+    bytecblock "sprout_asa_id" 0x151f7c75 "funding_pool_addr" "admin" "is_online" "total_harvested" "paused"
     txn ApplicationID
     bnz main_after_if_else@2
-    // governance.py:67
-    // self.admin = Account()
-    bytec 8 // "admin"
+    // staking_escrow.py:62-63
+    // # Set once by bootstrap(); 0 until then.
+    // self.sprout_asa_id = UInt64(0)
+    bytec_0 // "sprout_asa_id"
+    intc_0 // 0
+    app_global_put
+    // staking_escrow.py:64-74
+    // # Funding-pool destination. Set once at bootstrap, then IMMUTABLE (M1 — no
+    // # set_pool). Harvest pays THIS address.
+    // #
+    // # TESTING NOTE: for standalone escrow testing this is a plain WALLET
+    // # address, so harvested yield lands somewhere you can watch directly
+    // # without deploying the governance app. For the production design, this
+    // # becomes the governance app's account (either pass that app's address
+    // # here, or revert to the app-id-derived form — Application(id).address —
+    // # which removes the ability to mistype the destination). The address is
+    // # validated non-zero at bootstrap and can never change afterward.
+    // self.funding_pool_addr = Account()
+    bytec_2 // "funding_pool_addr"
     global ZeroAddress
     app_global_put
-    // governance.py:68
-    // self.sprout_asa_id = UInt64(0)
-    bytec 5 // "sprout_asa_id"
+    // staking_escrow.py:75-77
+    // # Admin manages keyreg and the deposit pause. Set once at bootstrap, then
+    // # IMMUTABLE (M3 — no set_admin). Pass a multisig here for safety.
+    // self.admin = Account()
+    bytec_3 // "admin"
+    global ZeroAddress
+    app_global_put
+    // staking_escrow.py:78-79
+    // # 0/1 consensus registration state (telemetry; keyreg itself is the source of truth).
+    // self.is_online = UInt64(0)
+    bytec 4 // "is_online"
     intc_0 // 0
     app_global_put
-    // governance.py:69
-    // self.escrow_app = UInt64(0)             # App A, informational
-    bytec 13 // "escrow_app"
+    // staking_escrow.py:80-81
+    // # Lifetime microAlgo swept to the pool (telemetry only).
+    // self.total_harvested = UInt64(0)
+    bytec 5 // "total_harvested"
     intc_0 // 0
     app_global_put
-    // governance.py:70
-    // self.epoch_id = UInt64(0)
-    bytec_1 // "epoch_id"
-    intc_0 // 0
-    app_global_put
-    // governance.py:71
-    // self.vote_open = UInt64(0)              # round voting opens (day 1)
-    bytec 9 // "vote_open"
-    intc_0 // 0
-    app_global_put
-    // governance.py:72
-    // self.vote_close = UInt64(0)             # round votes freeze (day 14)
-    bytec 11 // "vote_close"
-    intc_0 // 0
-    app_global_put
-    // governance.py:73
-    // self.tally_round = UInt64(0)            # round tally may begin (day 28)
-    bytec 12 // "tally_round"
-    intc_0 // 0
-    app_global_put
-    // governance.py:74
-    // self.pool_micro = UInt64(0)             # snapshotted pool for this epoch
-    bytec 10 // "pool_micro"
-    intc_0 // 0
-    app_global_put
-    // governance.py:75
-    // self.candidate_count = UInt64(0)
-    bytec 6 // "candidate_count"
-    intc_0 // 0
-    app_global_put
-    // governance.py:76
-    // self.phase = UInt64(0)                  # 0 open/voting, 2 finalized
-    bytec_3 // "phase"
-    intc_0 // 0
-    app_global_put
-    // governance.py:77
-    // self.bootstrapped = UInt64(0)
-    bytec 7 // "bootstrapped"
+    // staking_escrow.py:82-83
+    // # Deposit circuit breaker. Withdraw is NEVER gated by this.
+    // self.paused = UInt64(0)
+    bytec 6 // "paused"
     intc_0 // 0
     app_global_put
 
 main_after_if_else@2:
-    // governance.py:65
-    // class Governance(ARC4Contract):
+    // staking_escrow.py:60
+    // class StakingEscrow(ARC4Contract):
     txn NumAppArgs
-    bz main___algopy_default_create@23
+    bz main___algopy_default_create@22
     pushbytess 0x7883ad68 0x1cc8c403 // method "discard_unbootstrapped()void", method "admin_close()void"
     txna ApplicationArgs 0
     match main_discard_unbootstrapped_route@5 main_admin_close_route@6
 
 main_switch_case_next@7:
-    // governance.py:65
-    // class Governance(ARC4Contract):
+    // staking_escrow.py:60
+    // class StakingEscrow(ARC4Contract):
     txn OnCompletion
     !
     assert
     txn ApplicationID
     assert
-    pushbytess 0x4f1efc35 0x9319c651 0xaa72c3c9 0xda4af034 0xa1e51170 0x98287069 0x0c850fbe 0x51947edb 0x8ea96faf 0x9724e5a7 0x78dda2b0 // method "bootstrap(address,uint64,uint64)void", method "open_epoch(uint64,uint64,uint64)uint64", method "register_candidate(uint64,address)void", method "stake(axfer)uint64", method "unstake(uint64)uint64", method "vote(uint64)uint64", method "finalize(uint64[])uint64", method "get_epoch()uint64", method "get_pool()uint64", method "get_staked(address)uint64", method "get_candidate_weight(uint64)uint64"
+    pushbytess 0x93b810f5 0x0dd33ee3 0x3298e7c0 0xeff4513d 0xf160d61f 0x2817a18c 0xb79ec447 0xecae4815 0x33f970ad 0xa2206089 // method "bootstrap(address,address)uint64", method "set_pause(uint64)void", method "deposit(pay)uint64", method "withdraw(axfer)uint64", method "harvest()uint64", method "go_online(byte[],byte[],byte[],uint64,uint64,uint64)void", method "go_offline()void", method "get_principal()uint64", method "get_surplus()uint64", method "get_state()uint64"
     txna ApplicationArgs 0
-    match bootstrap open_epoch register_candidate stake unstake vote finalize get_epoch get_pool get_staked get_candidate_weight
+    match bootstrap set_pause deposit withdraw harvest go_online go_offline get_principal get_surplus get_state
     err
 
 main_admin_close_route@6:
-    // governance.py:358
+    // staking_escrow.py:417
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -97,7 +88,7 @@ main_admin_close_route@6:
     b admin_close
 
 main_discard_unbootstrapped_route@5:
-    // governance.py:334
+    // staking_escrow.py:390
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -107,7 +98,7 @@ main_discard_unbootstrapped_route@5:
     assert
     b discard_unbootstrapped
 
-main___algopy_default_create@23:
+main___algopy_default_create@22:
     txn OnCompletion
     !
     txn ApplicationID
@@ -116,9 +107,9 @@ main___algopy_default_create@23:
     return
 
 
-// governance.Governance.bootstrap[routing]() -> void:
+// staking_escrow.StakingEscrow.bootstrap[routing]() -> void:
 bootstrap:
-    // governance.py:111
+    // staking_escrow.py:136
     // @abimethod()
     txna ApplicationArgs 1
     dup
@@ -129,379 +120,337 @@ bootstrap:
     txna ApplicationArgs 2
     dup
     len
-    intc_2 // 8
+    intc_3 // 32
     ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    txna ApplicationArgs 3
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    // governance.py:113
+    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
+    // staking_escrow.py:151-152
+    // # Only the deployer may bootstrap, and only once.
     // assert Txn.sender == Global.creator_address, "deployer only"
     txn Sender
     global CreatorAddress
     ==
     assert // deployer only
-    // governance.py:114
-    // assert self.bootstrapped == 0, "already bootstrapped"
+    // staking_escrow.py:153
+    // assert self.sprout_asa_id == 0, "already bootstrapped"
     intc_0 // 0
-    bytec 7 // "bootstrapped"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
-    assert // check self.bootstrapped exists
+    assert // check self.sprout_asa_id exists
     !
     assert // already bootstrapped
-    // governance.py:115
+    // staking_escrow.py:155-156
+    // # Immutable references must be real.
     // assert admin.native != Global.zero_address, "admin cannot be zero"
-    dig 2
+    dig 1
     global ZeroAddress
     !=
     assert // admin cannot be zero
-    // governance.py:116
-    // assert sprout_asa_id != 0, "sprout asa required"
-    dig 1
-    assert // sprout asa required
-    // governance.py:118
-    // self.admin = admin.native
-    bytec 8 // "admin"
-    uncover 3
-    app_global_put
-    // governance.py:119
-    // self.sprout_asa_id = sprout_asa_id
-    bytec 5 // "sprout_asa_id"
-    dig 2
-    app_global_put
-    // governance.py:120
-    // self.escrow_app = escrow_app
-    bytec 13 // "escrow_app"
-    swap
-    app_global_put
-    // governance.py:121
-    // self.bootstrapped = UInt64(1)
-    bytec 7 // "bootstrapped"
-    intc_1 // 1
-    app_global_put
-    // governance.py:123-128
-    // itxn.AssetTransfer(
-    //     xfer_asset=sprout_asa_id,
-    //     asset_receiver=Global.current_application_address,
-    //     asset_amount=0,
+    // staking_escrow.py:157
+    // assert pool_addr.native != Global.zero_address, "pool address cannot be zero"
+    dup
+    global ZeroAddress
+    !=
+    assert // pool address cannot be zero
+    // staking_escrow.py:159-188
+    // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
+    // # address — permanently (a role zeroed at creation is irreversibly locked on
+    // # Algorand). So supply can never be minted beyond the fixed total, no account
+    // # can be frozen, and no tokens can be seized — by ANYONE, including this
+    // # contract or its manager. These are the depositor-protecting properties, and
+    // # they make accounted_principal = SUPPLY - sprout_held correct by construction.
+    // #
+    // # manager IS set — to the ESCROW APP ITSELF (no private key). Why it's needed
+    // # and why it's safe:
+    // #   * NEEDED: the app is the ASA creator, and a creator account cannot close
+    // #     while its asset exists; the asset can only be shed by DESTROYING it, and
+    // #     destroy requires the manager. Without a manager, admin_close can never
+    // #     fully close the account — the MBR would strand (this is the exact dead-
+    // #     lock hit on the first live deploy, pc=860).
+    // #   * SAFE: the manager is an account with no key; it can only act when THIS
+    // #     contract's code issues an AssetConfig, which happens in exactly two
+    // #     places — bootstrap (one-time create) and admin_close (destroy, gated on
+    // #     principal==0 + admin). The contract is non-upgradable, so no other
+    // #     AssetConfig path can ever be added. The manager power (reconfigure/
+    // #     destroy) is therefore unreachable except via those two gated paths, and
+    // #     the dangerous powers (freeze/clawback) are locked off above regardless.
+    // created = itxn.AssetConfig(
+    //     total=SUPPLY_BASE,
+    //     decimals=6,
+    //     unit_name=b"SPRT",
+    //     asset_name=b"Sprout",
+    //     manager=Global.current_application_address,
+    //     default_frozen=False,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:125
-    // asset_receiver=Global.current_application_address,
+    // staking_escrow.py:185
+    // manager=Global.current_application_address,
     global CurrentApplicationAddress
-    // governance.py:126
-    // asset_amount=0,
+    // staking_escrow.py:186
+    // default_frozen=False,
     intc_0 // 0
-    itxn_field AssetAmount
-    itxn_field AssetReceiver
-    itxn_field XferAsset
-    // governance.py:123
-    // itxn.AssetTransfer(
-    pushint 4 // axfer
+    itxn_field ConfigAssetDefaultFrozen
+    itxn_field ConfigAssetManager
+    // staking_escrow.py:184
+    // asset_name=b"Sprout",
+    pushbytes 0x5370726f7574
+    itxn_field ConfigAssetName
+    // staking_escrow.py:183
+    // unit_name=b"SPRT",
+    pushbytes 0x53505254
+    itxn_field ConfigAssetUnitName
+    // staking_escrow.py:182
+    // decimals=6,
+    pushint 6
+    itxn_field ConfigAssetDecimals
+    // staking_escrow.py:181
+    // total=SUPPLY_BASE,
+    intc 4 // 10000000000000000
+    itxn_field ConfigAssetTotal
+    // staking_escrow.py:159-180
+    // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
+    // # address — permanently (a role zeroed at creation is irreversibly locked on
+    // # Algorand). So supply can never be minted beyond the fixed total, no account
+    // # can be frozen, and no tokens can be seized — by ANYONE, including this
+    // # contract or its manager. These are the depositor-protecting properties, and
+    // # they make accounted_principal = SUPPLY - sprout_held correct by construction.
+    // #
+    // # manager IS set — to the ESCROW APP ITSELF (no private key). Why it's needed
+    // # and why it's safe:
+    // #   * NEEDED: the app is the ASA creator, and a creator account cannot close
+    // #     while its asset exists; the asset can only be shed by DESTROYING it, and
+    // #     destroy requires the manager. Without a manager, admin_close can never
+    // #     fully close the account — the MBR would strand (this is the exact dead-
+    // #     lock hit on the first live deploy, pc=860).
+    // #   * SAFE: the manager is an account with no key; it can only act when THIS
+    // #     contract's code issues an AssetConfig, which happens in exactly two
+    // #     places — bootstrap (one-time create) and admin_close (destroy, gated on
+    // #     principal==0 + admin). The contract is non-upgradable, so no other
+    // #     AssetConfig path can ever be added. The manager power (reconfigure/
+    // #     destroy) is therefore unreachable except via those two gated paths, and
+    // #     the dangerous powers (freeze/clawback) are locked off above regardless.
+    // created = itxn.AssetConfig(
+    pushint 3 // acfg
     itxn_field TypeEnum
-    // governance.py:127
+    // staking_escrow.py:187
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:123-128
-    // itxn.AssetTransfer(
-    //     xfer_asset=sprout_asa_id,
-    //     asset_receiver=Global.current_application_address,
-    //     asset_amount=0,
+    // staking_escrow.py:159-188
+    // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
+    // # address — permanently (a role zeroed at creation is irreversibly locked on
+    // # Algorand). So supply can never be minted beyond the fixed total, no account
+    // # can be frozen, and no tokens can be seized — by ANYONE, including this
+    // # contract or its manager. These are the depositor-protecting properties, and
+    // # they make accounted_principal = SUPPLY - sprout_held correct by construction.
+    // #
+    // # manager IS set — to the ESCROW APP ITSELF (no private key). Why it's needed
+    // # and why it's safe:
+    // #   * NEEDED: the app is the ASA creator, and a creator account cannot close
+    // #     while its asset exists; the asset can only be shed by DESTROYING it, and
+    // #     destroy requires the manager. Without a manager, admin_close can never
+    // #     fully close the account — the MBR would strand (this is the exact dead-
+    // #     lock hit on the first live deploy, pc=860).
+    // #   * SAFE: the manager is an account with no key; it can only act when THIS
+    // #     contract's code issues an AssetConfig, which happens in exactly two
+    // #     places — bootstrap (one-time create) and admin_close (destroy, gated on
+    // #     principal==0 + admin). The contract is non-upgradable, so no other
+    // #     AssetConfig path can ever be added. The manager power (reconfigure/
+    // #     destroy) is therefore unreachable except via those two gated paths, and
+    // #     the dangerous powers (freeze/clawback) are locked off above regardless.
+    // created = itxn.AssetConfig(
+    //     total=SUPPLY_BASE,
+    //     decimals=6,
+    //     unit_name=b"SPRT",
+    //     asset_name=b"Sprout",
+    //     manager=Global.current_application_address,
+    //     default_frozen=False,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:111
-    // @abimethod()
-    intc_1 // 1
-    return
-
-
-// governance.Governance.open_epoch[routing]() -> void:
-open_epoch:
-    pushbytes ""
-    dupn 2
-    // governance.py:132
-    // @abimethod()
-    txna ApplicationArgs 1
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    txna ApplicationArgs 2
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    txna ApplicationArgs 3
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    // governance.py:134
-    // self._assert_admin()
-    callsub _assert_admin
-    // governance.py:135
-    // assert self.bootstrapped == 1, "not bootstrapped"
-    intc_0 // 0
-    bytec 7 // "bootstrapped"
-    app_global_get_ex
-    assert // check self.bootstrapped exists
-    intc_1 // 1
-    ==
-    assert // not bootstrapped
-    // governance.py:136
-    // assert self.phase == 0 or self.phase == 2, "previous epoch not finalized"
-    intc_0 // 0
-    bytec_3 // "phase"
-    app_global_get_ex
-    assert // check self.phase exists
-    bz open_epoch_bool_true@3
-    intc_0 // 0
-    bytec_3 // "phase"
-    app_global_get_ex
-    assert // check self.phase exists
-    pushint 2
-    ==
-    bz open_epoch_bool_false@4
-
-open_epoch_bool_true@3:
-    intc_1 // 1
-
-open_epoch_bool_merge@5:
-    // governance.py:136
-    // assert self.phase == 0 or self.phase == 2, "previous epoch not finalized"
-    assert // previous epoch not finalized
-    // governance.py:137
-    // assert vote_open < vote_close, "vote_close must follow vote_open"
+    // staking_escrow.py:190
+    // self.sprout_asa_id = created.created_asset.id
+    bytec_0 // "sprout_asa_id"
+    itxn CreatedAssetID
+    app_global_put
+    // staking_escrow.py:191
+    // self.admin = admin.native
+    bytec_3 // "admin"
     uncover 2
-    dup
-    uncover 3
-    dup
-    cover 2
-    <
-    assert // vote_close must follow vote_open
-    // governance.py:138
-    // assert vote_close < tally_round, "tally must follow vote_close"
-    dup
-    uncover 3
-    dup
-    cover 3
-    <
-    assert // tally must follow vote_close
-    // governance.py:140
-    // self.epoch_id += 1
+    app_global_put
+    // staking_escrow.py:192
+    // self.funding_pool_addr = pool_addr.native
+    bytec_2 // "funding_pool_addr"
+    swap
+    app_global_put
+    // staking_escrow.py:193
+    // return self.sprout_asa_id
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
-    assert // check self.epoch_id exists
-    intc_1 // 1
-    +
-    bytec_1 // "epoch_id"
-    swap
-    app_global_put
-    // governance.py:141
-    // self.vote_open = vote_open
-    bytec 9 // "vote_open"
-    uncover 3
-    app_global_put
-    // governance.py:142
-    // self.vote_close = vote_close
-    bytec 11 // "vote_close"
-    swap
-    app_global_put
-    // governance.py:143
-    // self.tally_round = tally_round
-    bytec 12 // "tally_round"
-    swap
-    app_global_put
-    // governance.py:144
-    // self.candidate_count = UInt64(0)
-    bytec 6 // "candidate_count"
-    intc_0 // 0
-    app_global_put
-    // governance.py:145
-    // self.phase = UInt64(0)
-    bytec_3 // "phase"
-    intc_0 // 0
-    app_global_put
-    // governance.py:147
-    // bal = Global.current_application_address.balance
-    global CurrentApplicationAddress
-    acct_params_get AcctBalance
-    swap
-    dup
-    cover 2
-    bury 5
-    assert // account funded
-    // governance.py:148
-    // mbr = Global.current_application_address.min_balance
-    global CurrentApplicationAddress
-    acct_params_get AcctMinBalance
-    swap
-    dup
-    cover 2
-    bury 5
-    assert // account funded
-    // governance.py:149
-    // pool = UInt64(0)
-    intc_0 // 0
-    bury 3
-    // governance.py:150
-    // if bal > mbr:
-    >
-    bz open_epoch_after_if_else@7
-    // governance.py:151
-    // pool = bal - mbr
-    dig 2
-    dig 2
-    -
-    bury 1
-
-open_epoch_after_if_else@7:
-    // governance.py:152
-    // self.pool_micro = pool
-    bytec 10 // "pool_micro"
-    dig 1
-    app_global_put
-    // governance.py:153
-    // return self.epoch_id
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    // governance.py:132
+    assert // check self.sprout_asa_id exists
+    // staking_escrow.py:136
     // @abimethod()
     itob
-    bytec_2 // 0x151f7c75
+    bytec_1 // 0x151f7c75
     swap
     concat
     log
     intc_1 // 1
     return
 
-open_epoch_bool_false@4:
-    intc_0 // 0
-    b open_epoch_bool_merge@5
 
-
-// governance.Governance.register_candidate[routing]() -> void:
-register_candidate:
-    // governance.py:155
+// staking_escrow.StakingEscrow.set_pause[routing]() -> void:
+set_pause:
+    // staking_escrow.py:195
     // @abimethod()
     txna ApplicationArgs 1
     dup
     len
-    intc_2 // 8
+    pushint 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    txna ApplicationArgs 2
-    dup
-    len
-    intc_3 // 32
-    ==
-    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // governance.py:160
+    // staking_escrow.py:197
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:161
-    // assert self.epoch_id > 0, "no epoch"
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    assert // no epoch
-    // governance.py:162
-    // assert self.phase == 0, "voting not open"
-    intc_0 // 0
-    bytec_3 // "phase"
-    app_global_get_ex
-    assert // check self.phase exists
-    !
-    assert // voting not open
-    // governance.py:163
-    // assert Global.round < self.vote_open, "candidates lock at voting open"
-    global Round
-    intc_0 // 0
-    bytec 9 // "vote_open"
-    app_global_get_ex
-    assert // check self.vote_open exists
-    <
-    assert // candidates lock at voting open
-    // governance.py:164
-    // assert self.candidate_count < MAX_CANDIDATES, "candidate limit reached"
-    intc_0 // 0
-    bytec 6 // "candidate_count"
-    app_global_get_ex
-    assert // check self.candidate_count exists
+    // staking_escrow.py:198
+    // assert flag <= 1, "flag must be 0 or 1"
     dup
-    pushint 20
-    <
-    assert // candidate limit reached
-    // governance.py:165
-    // assert directory_entry_id != 0, "directory entry id must be nonzero"
-    dig 2
-    assert // directory entry id must be nonzero
-    // governance.py:166
-    // assert directory_entry_id not in self.candidates, "candidate exists"
-    uncover 2
-    itob
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    box_len
-    bury 1
-    !
-    assert // candidate exists
-    // governance.py:167
-    // assert payout_addr.native != Global.zero_address, "payout addr required"
-    dig 2
-    global ZeroAddress
-    !=
-    assert // payout addr required
-    // governance.py:171
-    // weight=ArcU64(0),
-    intc_0 // 0
-    itob
-    // governance.py:169-172
-    // self.candidates[directory_entry_id] = CandidateBox(
-    //     payout_addr=payout_addr,
-    //     weight=ArcU64(0),
-    // )
-    uncover 3
-    swap
-    concat
-    box_put
-    // governance.py:173
-    // self.candidate_count += 1
     intc_1 // 1
-    +
-    bytec 6 // "candidate_count"
+    <=
+    assert // flag must be 0 or 1
+    // staking_escrow.py:199
+    // self.paused = flag
+    bytec 6 // "paused"
     swap
     app_global_put
-    // governance.py:155
+    // staking_escrow.py:195
     // @abimethod()
     intc_1 // 1
     return
 
 
-// governance.Governance.stake[routing]() -> void:
-stake:
-    // governance.py:177
+// staking_escrow.StakingEscrow.deposit[routing]() -> void:
+deposit:
+    // staking_escrow.py:205
+    // @abimethod()
+    txn GroupIndex
+    intc_1 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
+    // staking_escrow.py:211
+    // assert self.paused == 0, "deposits paused"
+    intc_0 // 0
+    bytec 6 // "paused"
+    app_global_get_ex
+    assert // check self.paused exists
+    !
+    assert // deposits paused
+    // staking_escrow.py:212
+    // assert self.sprout_asa_id != 0, "not bootstrapped"
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    dup
+    assert // not bootstrapped
+    // staking_escrow.py:214-217
+    // # H3-style ordering guard: the payment must come BEFORE this app call in
+    // # the group, so a later txn in the same group can't be reinterpreted as the
+    // # funding payment for this mint.
+    // assert pay.group_index < Txn.group_index, "payment must precede this call"
+    dig 1
+    gtxns GroupIndex
+    txn GroupIndex
+    <
+    assert // payment must precede this call
+    // staking_escrow.py:219-220
+    // # The payment must be to the app account, from the caller, nonzero.
+    // assert pay.receiver == Global.current_application_address, "pay must target escrow"
+    dig 1
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // pay must target escrow
+    // staking_escrow.py:221
+    // assert pay.sender == Txn.sender, "payer must be caller"
+    dig 1
+    gtxns Sender
+    txn Sender
+    ==
+    assert // payer must be caller
+    // staking_escrow.py:222
+    // amount = pay.amount
+    swap
+    gtxns Amount
+    // staking_escrow.py:223
+    // assert amount > 0, "zero deposit"
+    dup
+    assert // zero deposit
+    // staking_escrow.py:225-228
+    // # Depositor must already be opted into the Sprout ASA, or the inner
+    // # transfer back to them would fail and revert the whole group. Check it
+    // # up front with a clear error instead of a late, opaque failure.
+    // assert Txn.sender.is_opted_in(self._sprout()), "opt into Sprout before depositing"
+    txn Sender
+    dig 2
+    asset_holding_get AssetBalance
+    bury 1
+    assert // opt into Sprout before depositing
+    // staking_escrow.py:230-236
+    // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.sprout_asa_id,
+    //     asset_receiver=Txn.sender,
+    //     asset_amount=amount,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // staking_escrow.py:233
+    // asset_receiver=Txn.sender,
+    txn Sender
+    dig 1
+    itxn_field AssetAmount
+    itxn_field AssetReceiver
+    swap
+    itxn_field XferAsset
+    // staking_escrow.py:230-231
+    // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
+    // itxn.AssetTransfer(
+    pushint 4 // axfer
+    itxn_field TypeEnum
+    // staking_escrow.py:235
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // staking_escrow.py:230-236
+    // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
+    // itxn.AssetTransfer(
+    //     xfer_asset=self.sprout_asa_id,
+    //     asset_receiver=Txn.sender,
+    //     asset_amount=amount,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // staking_escrow.py:205
+    // @abimethod()
+    itob
+    bytec_1 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// staking_escrow.StakingEscrow.withdraw[routing]() -> void:
+withdraw:
+    // staking_escrow.py:244
     // @abimethod()
     txn GroupIndex
     intc_1 // 1
@@ -511,785 +460,107 @@ stake:
     pushint 4 // axfer
     ==
     assert // transaction type is axfer
-    // governance.py:181
+    // staking_escrow.py:251
     // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
-    bytec 5 // "sprout_asa_id"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
     dup
     assert // not bootstrapped
-    // governance.py:182
+    // staking_escrow.py:253-261
+    // # H3: the asset transfer must come BEFORE this app call in the group.
+    // # The payout is read straight off the referenced `axfer` (algo_out == n ==
+    // # axfer.asset_amount), not from an account balance, so this ordering guard
+    // # is not what makes the 1:1 amount correct. It pins the referenced txn's
+    // # position so the group's shape is unambiguous — the axfer that funds this
+    // # withdraw sits where callers and reviewers expect, rather than being some
+    // # later transaction reinterpreted as the Sprout-in. Defense-in-depth, not a
+    // # load-bearing invariant.
+    // assert axfer.group_index < Txn.group_index, "asset transfer must precede this call"
+    dig 1
+    gtxns GroupIndex
+    txn GroupIndex
+    <
+    assert // asset transfer must precede this call
+    // staking_escrow.py:263
     // assert axfer.xfer_asset == self._sprout(), "wrong asset"
     dig 1
     gtxns XferAsset
     ==
     assert // wrong asset
-    // governance.py:183
-    // assert axfer.asset_receiver == Global.current_application_address, "stake into app"
+    // staking_escrow.py:264
+    // assert axfer.asset_receiver == Global.current_application_address, "must send Sprout to escrow"
     dup
     gtxns AssetReceiver
     global CurrentApplicationAddress
     ==
-    assert // stake into app
-    // governance.py:184
+    assert // must send Sprout to escrow
+    // staking_escrow.py:265
     // assert axfer.sender == Txn.sender, "sender must be caller"
     dup
     gtxns Sender
     txn Sender
     ==
     assert // sender must be caller
-    // governance.py:185
-    // amt = axfer.asset_amount
+    // staking_escrow.py:267
+    // n = axfer.asset_amount
     gtxns AssetAmount
+    // staking_escrow.py:268
+    // assert n > 0, "zero withdraw"
     dup
-    // governance.py:186
-    // assert amt > 0, "zero stake"
-    assert // zero stake
-    // governance.py:188
-    // if Txn.sender in self.voters:
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_len
-    bury 1
-    bz stake_else_body@3
-    // governance.py:189
-    // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_get
-    assert // check self.voters entry exists
-    // governance.py:190
-    // v.staked = ArcU64(v.staked.native + amt)
-    dup
-    intc_0 // 0
-    extract_uint64
-    uncover 2
-    +
-    itob
-    replace2 0
-    // governance.py:191
-    // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    dig 1
-    box_put
-    // governance.py:192
-    // total: UInt64 = v.staked.native
-    intc_0 // 0
-    extract_uint64
-
-stake_after_inlined_governance.Governance.stake@4:
-    // governance.py:177
-    // @abimethod()
-    itob
-    bytec_2 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-stake_else_body@3:
-    // governance.py:196
-    // staked=ArcU64(amt),
-    dup
-    itob
-    // governance.py:197
-    // voted_candidate=ArcU64(0),
-    intc_0 // 0
-    itob
-    // governance.py:200
-    // epoch=ArcU64(self.epoch_id),
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    itob
-    // governance.py:195-201
-    // self.voters[Txn.sender] = VoterBox(
-    //     staked=ArcU64(amt),
-    //     voted_candidate=ArcU64(0),
-    //     voted_weight=ArcU64(0),
-    //     has_vote=UInt8(0),
-    //     epoch=ArcU64(self.epoch_id),
-    // )
-    uncover 2
+    assert // zero withdraw
+    // staking_escrow.py:285-286
+    // # I5: paying out must not drop the account below its live minimum balance.
+    // app_bal = Global.current_application_address.balance
+    global CurrentApplicationAddress
+    acct_params_get AcctBalance
+    assert // account funded
+    // staking_escrow.py:110-112
+    // # Live minimum balance of the app account (base + per-ASA + any boxes).
+    // # Read from the ledger, NEVER hardcoded, so a protocol MBR change can't strand funds.
+    // return Global.current_application_address.min_balance
+    global CurrentApplicationAddress
+    acct_params_get AcctMinBalance
+    assert // account funded
+    // staking_escrow.py:287
+    // assert app_bal >= algo_out + self._live_mbr(), "would breach min balance"
     dig 2
-    concat
-    uncover 2
-    concat
-    // governance.py:199
-    // has_vote=UInt8(0),
-    pushbytes 0x00
-    // governance.py:195-201
-    // self.voters[Txn.sender] = VoterBox(
-    //     staked=ArcU64(amt),
-    //     voted_candidate=ArcU64(0),
-    //     voted_weight=ArcU64(0),
-    //     has_vote=UInt8(0),
-    //     epoch=ArcU64(self.epoch_id),
-    // )
-    concat
-    swap
-    concat
-    // governance.py:195
-    // self.voters[Txn.sender] = VoterBox(
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    // governance.py:195-201
-    // self.voters[Txn.sender] = VoterBox(
-    //     staked=ArcU64(amt),
-    //     voted_candidate=ArcU64(0),
-    //     voted_weight=ArcU64(0),
-    //     has_vote=UInt8(0),
-    //     epoch=ArcU64(self.epoch_id),
-    // )
-    swap
-    box_put
-    // governance.py:177
-    // @abimethod()
-    b stake_after_inlined_governance.Governance.stake@4
-
-
-// governance.Governance.unstake[routing]() -> void:
-unstake:
-    intc_0 // 0
-    pushbytes ""
-    dup
-    // governance.py:204
-    // @abimethod()
-    txna ApplicationArgs 1
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    dup
-    // governance.py:209
-    // assert Txn.sender in self.voters, "nothing staked"
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_len
-    bury 1
-    assert // nothing staked
-    // governance.py:210
-    // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_get
-    assert // check self.voters entry exists
-    // governance.py:211
-    // assert amount > 0, "zero unstake"
-    dig 1
-    assert // zero unstake
-    // governance.py:212
-    // assert v.staked.native >= amount, "exceeds staked"
-    dup
-    intc_0 // 0
-    extract_uint64
-    dup
-    dig 3
-    >=
-    assert // exceeds staked
-    // governance.py:214
-    // v.staked = ArcU64(v.staked.native - amount)
-    uncover 2
-    -
-    itob
-    replace2 0
-    dup
-    // governance.py:216-217
-    // # Decrement voted weight if the new staked balance is below it.
-    // if v.has_vote.native == 1 and v.voted_weight.native > v.staked.native:
-    pushint 24
-    getbyte
-    intc_1 // 1
-    ==
-    bz unstake_after_if_else@4
-    dupn 2
-    pushint 16
-    extract_uint64
-    dup
-    cover 2
-    bury 6
-    dup
-    extract 0 8
-    bury 7
-    intc_0 // 0
-    extract_uint64
-    dup
-    bury 5
-    >
-    bz unstake_after_if_else@4
-    // governance.py:218
-    // reduce = v.voted_weight.native - v.staked.native
-    dig 3
-    dig 3
-    -
-    // governance.py:219
-    // self._sub_weight(v.voted_candidate.native, reduce)
-    dig 1
-    intc_2 // 8
-    extract_uint64
-    swap
-    callsub _sub_weight
-    // governance.py:220
-    // v.voted_weight = ArcU64(v.staked.native)
-    dig 4
-    replace2 16
-
-unstake_after_if_else@4:
-    // governance.py:222
-    // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    dig 1
-    box_put
-    // governance.py:224-229
-    // itxn.AssetTransfer(
-    //     xfer_asset=self.sprout_asa_id,
-    //     asset_receiver=Txn.sender,
-    //     asset_amount=amount,
-    //     fee=0,
-    // ).submit()
-    itxn_begin
-    // governance.py:225
-    // xfer_asset=self.sprout_asa_id,
-    intc_0 // 0
-    bytec 5 // "sprout_asa_id"
-    app_global_get_ex
-    assert // check self.sprout_asa_id exists
-    // governance.py:226
-    // asset_receiver=Txn.sender,
-    txn Sender
-    uncover 3
-    itxn_field AssetAmount
-    itxn_field AssetReceiver
-    itxn_field XferAsset
-    // governance.py:224
-    // itxn.AssetTransfer(
-    pushint 4 // axfer
-    itxn_field TypeEnum
-    // governance.py:228
-    // fee=0,
-    intc_0 // 0
-    itxn_field Fee
-    // governance.py:224-229
-    // itxn.AssetTransfer(
-    //     xfer_asset=self.sprout_asa_id,
-    //     asset_receiver=Txn.sender,
-    //     asset_amount=amount,
-    //     fee=0,
-    // ).submit()
-    itxn_submit
-    // governance.py:230
-    // remaining: UInt64 = v.staked.native
-    extract 0 8
-    // governance.py:204
-    // @abimethod()
-    bytec_2 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-
-// governance.Governance.vote[routing]() -> void:
-vote:
-    // governance.py:235
-    // @abimethod()
-    txna ApplicationArgs 1
-    dupn 2
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    // governance.py:241
-    // assert self.epoch_id > 0, "no epoch"
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    assert // no epoch
-    // governance.py:242
-    // assert self.phase == 0, "voting closed"
-    intc_0 // 0
-    bytec_3 // "phase"
-    app_global_get_ex
-    assert // check self.phase exists
-    !
-    assert // voting closed
-    // governance.py:243
-    // assert Global.round >= self.vote_open, "voting not open yet"
-    global Round
-    intc_0 // 0
-    bytec 9 // "vote_open"
-    app_global_get_ex
-    assert // check self.vote_open exists
-    >=
-    assert // voting not open yet
-    // governance.py:244
-    // assert Global.round < self.vote_close, "voting window closed"      # the freeze
-    global Round
-    intc_0 // 0
-    bytec 11 // "vote_close"
-    app_global_get_ex
-    assert // check self.vote_close exists
-    <
-    assert // voting window closed
-    // governance.py:245
-    // assert candidate_id in self.candidates, "unknown candidate"
-    itob
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    box_len
-    bury 1
-    assert // unknown candidate
-    // governance.py:246
-    // assert Txn.sender in self.voters, "stake before voting"
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_len
-    bury 1
-    assert // stake before voting
-    // governance.py:248
-    // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    box_get
-    swap
-    dup
-    uncover 2
-    assert // check self.voters entry exists
-    // governance.py:249
-    // new_weight: UInt64 = v.staked.native
-    dup
-    extract 0 8
-    cover 3
-    dup
-    intc_0 // 0
-    extract_uint64
-    dup
-    cover 2
-    // governance.py:250
-    // assert new_weight > 0, "nothing staked"
-    assert // nothing staked
-    // governance.py:252-253
-    // # Remove any existing contribution first (old candidate, old weight).
-    // if v.has_vote.native == 1:
-    pushint 24
-    getbyte
-    intc_1 // 1
-    ==
-    bz vote_after_if_else@3
-    // governance.py:254
-    // self._sub_weight(v.voted_candidate.native, v.voted_weight.native)
-    dig 1
-    dup
-    intc_2 // 8
-    extract_uint64
-    swap
-    pushint 16
-    extract_uint64
-    callsub _sub_weight
-
-vote_after_if_else@3:
-    // governance.py:94
-    // c = self.candidates[cid].copy()
-    uncover 2
-    dup
-    box_get
-    assert // check self.candidates entry exists
-    // governance.py:95
-    // c.weight = ArcU64(c.weight.native + delta)
-    intc_3 // 32
-    extract_uint64
-    uncover 2
     +
-    itob
-    // governance.py:95-96
-    // c.weight = ArcU64(c.weight.native + delta)
-    // self.candidates[cid] = c.copy()
-    intc_3 // 32
-    swap
-    box_replace // on error: index out of bounds
-    // governance.py:259
-    // v.voted_candidate = ArcU64(candidate_id)
-    uncover 2
-    replace2 8
-    // governance.py:260
-    // v.voted_weight = ArcU64(new_weight)
-    dig 1
-    replace2 16
-    // governance.py:261
-    // v.has_vote = UInt8(1)
-    pushbytes 0x01
-    replace2 24
-    // governance.py:262
-    // v.epoch = ArcU64(self.epoch_id)
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    itob
-    replace2 25
-    // governance.py:263
-    // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
-    txn Sender
-    concat
-    swap
-    box_put
-    // governance.py:235
-    // @abimethod()
-    bytec_2 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-
-// governance.Governance.finalize[routing]() -> void:
-finalize:
-    intc_0 // 0
-    pushbytes ""
-    dupn 2
-    // governance.py:268
-    // @abimethod()
-    txna ApplicationArgs 1
-    dupn 2
-    intc_0 // 0
-    extract_uint16 // on error: invalid array length header
-    dup
-    cover 2
-    dup
-    intc_2 // 8
-    *
-    pushint 2
-    +
-    uncover 2
-    len
-    ==
-    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint64>
-    // governance.py:277
-    // assert self.phase == 0, "already finalized"
-    intc_0 // 0
-    bytec_3 // "phase"
-    app_global_get_ex
-    assert // check self.phase exists
-    !
-    assert // already finalized
-    // governance.py:278
-    // assert Global.round >= self.tally_round, "tally not open"
-    global Round
-    intc_0 // 0
-    bytec 12 // "tally_round"
-    app_global_get_ex
-    assert // check self.tally_round exists
     >=
-    assert // tally not open
-    // governance.py:279
-    // assert ranked_candidate_ids.length == self.candidate_count, "must list all candidates"
-    intc_0 // 0
-    bytec 6 // "candidate_count"
-    app_global_get_ex
-    assert // check self.candidate_count exists
-    dig 1
-    ==
-    assert // must list all candidates
-    // governance.py:282
-    // assert n > 0, "no candidates"
-    assert // no candidates
-    // governance.py:284-285
-    // # 1) Verify the submitted ordering is descending by weight.
-    // prev_w = UInt64(0)
-    intc_0 // 0
-    cover 2
-    // governance.py:286
-    // i = UInt64(0)
-    intc_0 // 0
-    cover 2
-
-finalize_while_top@2:
-    // governance.py:287
-    // while i < n:
-    dig 2
-    dig 1
-    <
-    bz finalize_after_while@6
-    // governance.py:288
-    // cid = ranked_candidate_ids[i].native
-    dig 1
-    extract 2 0
-    dig 3
-    dup
-    cover 2
-    intc_2 // 8
-    *
-    intc_2 // 8
-    extract3 // on error: index access is out of bounds
-    // governance.py:289
-    // assert cid in self.candidates, "unknown candidate in ranking"
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    box_len
-    bury 1
-    assert // unknown candidate in ranking
-    // governance.py:290
-    // w = self.candidates[cid].weight.native
-    box_get
-    pop
-    intc_3 // 32
-    extract_uint64
-    bury 6
-    // governance.py:291
-    // if i > 0:
-    bz finalize_after_if_else@5
-    // governance.py:292
-    // assert w <= prev_w, "ranking not descending"
-    dig 4
-    dig 4
-    <=
-    assert // ranking not descending
-
-finalize_after_if_else@5:
-    // governance.py:294
-    // i += 1
-    dig 2
-    intc_1 // 1
-    +
-    bury 3
-    dig 4
-    bury 4
-    b finalize_while_top@2
-
-finalize_after_while@6:
-    // governance.py:296-298
-    // # 2) Cutoff = weight at the TARGET_WINNERS-th place (or last if fewer). Winners
-    // #    = all candidates with weight >= cutoff AND > 0 (tie-widening falls out).
-    // cut_index = UInt64(TARGET_WINNERS - 1)
-    pushint 2
-    bury 7
-    // governance.py:299
-    // if n < TARGET_WINNERS:
-    dup
-    pushint 3
-    <
-    bz finalize_after_if_else@8
-    // governance.py:300
-    // cut_index = n - 1
-    dup
-    intc_1 // 1
-    -
-    bury 7
-
-finalize_after_if_else@8:
-    // governance.py:301
-    // cut_cid: UInt64 = ranked_candidate_ids[cut_index].native
-    swap
-    extract 2 0
-    dup
-    cover 2
-    dig 7
-    intc_2 // 8
-    *
-    intc_2 // 8
-    extract3 // on error: index access is out of bounds
-    // governance.py:302
-    // cutoff: UInt64 = self.candidates[cut_cid].weight.native
-    bytec 4 // 0x633a
-    swap
-    concat
-    box_get
-    assert // check self.candidates entry exists
-    intc_3 // 32
-    extract_uint64
-    cover 2
-    // governance.py:304
-    // winners = UInt64(0)
-    intc_0 // 0
-    // governance.py:305
-    // i = UInt64(0)
-    dup
-    bury 5
-
-finalize_while_top@9:
-    // governance.py:306
-    // while i < n:
-    dig 4
-    dig 2
-    <
-    bz finalize_after_while@14
-    // governance.py:307
-    // w = self.candidates[ranked_candidate_ids[i].native].weight.native
-    dig 4
-    intc_2 // 8
-    *
-    dig 3
-    swap
-    intc_2 // 8
-    extract3 // on error: index access is out of bounds
-    bytec 4 // 0x633a
-    swap
-    concat
-    box_get
-    assert // check self.candidates entry exists
-    intc_3 // 32
-    extract_uint64
-    dup
-    bury 8
-    // governance.py:308
-    // if w >= cutoff and w > 0:
-    dig 4
-    >=
-    bz finalize_after_if_else@13
-    dig 6
-    bz finalize_after_if_else@13
-    // governance.py:309
-    // winners += 1
-    intc_1 // 1
-    +
-
-finalize_after_if_else@13:
-    // governance.py:310
-    // i += 1
-    dig 4
-    intc_1 // 1
-    +
-    bury 5
-    b finalize_while_top@9
-
-finalize_after_while@14:
-    // governance.py:311
-    // assert winners > 0, "no votes cast"
-    dupn 2
-    assert // no votes cast
-    // governance.py:313-314
-    // # 3) Equal split among winners. Dust (pool mod winners) stays and carries over.
-    // share = self.pool_micro // winners
-    intc_0 // 0
-    bytec 10 // "pool_micro"
-    app_global_get_ex
-    assert // check self.pool_micro exists
-    swap
-    /
-    dup
-    bury 9
-    // governance.py:315
-    // if share > 0:
-    bz finalize_after_if_else@23
-    // governance.py:316
-    // i = UInt64(0)
-    intc_0 // 0
-    bury 5
-
-finalize_while_top@16:
-    // governance.py:317
-    // while i < n:
-    dig 4
-    dig 2
-    <
-    bz finalize_after_if_else@23
-    // governance.py:318
-    // cid = ranked_candidate_ids[i].native
-    dig 4
-    intc_2 // 8
-    *
-    dig 3
-    swap
-    intc_2 // 8
-    extract3 // on error: index access is out of bounds
-    // governance.py:319
-    // w = self.candidates[cid].weight.native
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    bury 11
-    box_get
-    assert // check self.candidates entry exists
-    intc_3 // 32
-    extract_uint64
-    dup
-    bury 8
-    // governance.py:320
-    // if w >= cutoff and w > 0:
-    dig 4
-    >=
-    bz finalize_after_if_else@21
-    dig 6
-    bz finalize_after_if_else@21
-    // governance.py:321
-    // c = self.candidates[cid].copy()
-    dig 9
-    box_get
-    assert // check self.candidates entry exists
-    // governance.py:322-326
+    assert // would breach min balance
+    // staking_escrow.py:289-293
     // itxn.Payment(
-    //     receiver=c.payout_addr.native,
-    //     amount=share,
+    //     receiver=Txn.sender,
+    //     amount=algo_out,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:323
-    // receiver=c.payout_addr.native,
-    extract 0 32
-    dig 8
+    // staking_escrow.py:290
+    // receiver=Txn.sender,
+    txn Sender
+    dig 1
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:322
+    // staking_escrow.py:289
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:325
+    // staking_escrow.py:292
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:322-326
+    // staking_escrow.py:289-293
     // itxn.Payment(
-    //     receiver=c.payout_addr.native,
-    //     amount=share,
+    //     receiver=Txn.sender,
+    //     amount=algo_out,
     //     fee=0,
     // ).submit()
     itxn_submit
-
-finalize_after_if_else@21:
-    // governance.py:327
-    // i += 1
-    dig 4
-    intc_1 // 1
-    +
-    bury 5
-    b finalize_while_top@16
-
-finalize_after_if_else@23:
-    // governance.py:329
-    // self.phase = UInt64(2)
-    bytec_3 // "phase"
-    pushint 2
-    app_global_put
-    // governance.py:268
+    // staking_escrow.py:244
     // @abimethod()
     itob
-    bytec_2 // 0x151f7c75
+    bytec_1 // 0x151f7c75
     swap
     concat
     log
@@ -1297,23 +568,300 @@ finalize_after_if_else@23:
     return
 
 
-// governance.Governance.discard_unbootstrapped[routing]() -> void:
+// staking_escrow.StakingEscrow.harvest[routing]() -> void:
+harvest:
+    // staking_escrow.py:309
+    // assert self.funding_pool_addr != Global.zero_address, "pool unset"
+    intc_0 // 0
+    bytec_2 // "funding_pool_addr"
+    app_global_get_ex
+    assert // check self.funding_pool_addr exists
+    global ZeroAddress
+    !=
+    assert // pool unset
+    // staking_escrow.py:311
+    // app_bal = Global.current_application_address.balance
+    global CurrentApplicationAddress
+    acct_params_get AcctBalance
+    assert // account funded
+    // staking_escrow.py:313-317
+    // # I5/I6 + C1: the account must cover principal + MBR + buffer before we
+    // # sweep anything. Checked subtraction — revert rather than ever touch
+    // # principal (the fix the Folks reports all lacked), and keep the buffer in
+    // # reserve so a later MBR increase can't strand withdrawals.
+    // floor = self._harvest_floor()
+    callsub _harvest_floor
+    // staking_escrow.py:318
+    // assert app_bal >= floor, "no surplus: balance below principal+mbr+buffer"
+    dup2
+    >=
+    assert // no surplus: balance below principal+mbr+buffer
+    // staking_escrow.py:319
+    // surplus = app_bal - floor
+    -
+    // staking_escrow.py:320
+    // assert surplus > 0, "nothing to harvest"
+    dup
+    assert // nothing to harvest
+    // staking_escrow.py:322-326
+    // itxn.Payment(
+    //     receiver=self._pool_addr(),
+    //     amount=surplus,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    // staking_escrow.py:116-119
+    // # The funding pool's receiving account. For testing this is the wallet
+    // # address pinned at bootstrap. (Production: swap for an app-id-derived
+    // # address to remove the mistype risk — see the field comment.)
+    // return self.funding_pool_addr
+    intc_0 // 0
+    bytec_2 // "funding_pool_addr"
+    app_global_get_ex
+    assert // check self.funding_pool_addr exists
+    dig 1
+    itxn_field Amount
+    itxn_field Receiver
+    // staking_escrow.py:322
+    // itxn.Payment(
+    intc_1 // pay
+    itxn_field TypeEnum
+    // staking_escrow.py:325
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // staking_escrow.py:322-326
+    // itxn.Payment(
+    //     receiver=self._pool_addr(),
+    //     amount=surplus,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // staking_escrow.py:328
+    // self.total_harvested += surplus
+    intc_0 // 0
+    bytec 5 // "total_harvested"
+    app_global_get_ex
+    assert // check self.total_harvested exists
+    dig 1
+    +
+    bytec 5 // "total_harvested"
+    swap
+    app_global_put
+    // staking_escrow.py:301
+    // @abimethod()
+    itob
+    bytec_1 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// staking_escrow.StakingEscrow.go_online[routing]() -> void:
+go_online:
+    // staking_escrow.py:335
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    intc_2 // 2
+    +
+    dig 1
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
+    extract 2 0
+    txna ApplicationArgs 2
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    intc_2 // 2
+    +
+    dig 1
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
+    extract 2 0
+    txna ApplicationArgs 3
+    dup
+    intc_0 // 0
+    extract_uint16 // on error: invalid array length header
+    intc_2 // 2
+    +
+    dig 1
+    len
+    ==
+    assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
+    extract 2 0
+    txna ApplicationArgs 4
+    dup
+    len
+    pushint 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    txna ApplicationArgs 5
+    dup
+    len
+    pushint 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    txna ApplicationArgs 6
+    dup
+    len
+    pushint 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    // staking_escrow.py:354
+    // self._assert_admin()
+    callsub _assert_admin
+    // staking_escrow.py:355
+    // assert self.sprout_asa_id != 0, "not bootstrapped"  # M-A
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    assert // not bootstrapped
+    // staking_escrow.py:357-358
+    // # Key byte lengths must match Algorand's ed25519 / state-proof formats.
+    // assert vote_pk.length == VOTE_PK_LEN, "vote key must be 32 bytes"
+    dig 5
+    len
+    intc_3 // 32
+    ==
+    assert // vote key must be 32 bytes
+    // staking_escrow.py:359
+    // assert sel_pk.length == SEL_PK_LEN, "selection key must be 32 bytes"
+    dig 4
+    len
+    intc_3 // 32
+    ==
+    assert // selection key must be 32 bytes
+    // staking_escrow.py:360
+    // assert sp_pk.length == SP_PK_LEN, "state-proof key must be 64 bytes"
+    dig 3
+    len
+    pushint 64
+    ==
+    assert // state-proof key must be 64 bytes
+    // staking_escrow.py:362-363
+    // # Round window must be sane and not already expired.
+    // assert vote_last > vote_first, "vote_last must exceed vote_first"
+    dig 1
+    dig 3
+    >
+    assert // vote_last must exceed vote_first
+    // staking_escrow.py:364
+    // assert vote_last > Global.round, "participation window already expired"
+    dig 1
+    global Round
+    >
+    assert // participation window already expired
+    // staking_escrow.py:365
+    // assert vote_kd > 0, "vote key dilution must be positive"
+    dup
+    assert // vote key dilution must be positive
+    // staking_escrow.py:367-375
+    // itxn.KeyRegistration(
+    //     vote_key=vote_pk,
+    //     selection_key=sel_pk,
+    //     state_proof_key=sp_pk,
+    //     vote_first=vote_first,
+    //     vote_last=vote_last,
+    //     vote_key_dilution=vote_kd,
+    //     fee=0,
+    // ).submit()
+    itxn_begin
+    itxn_field VoteKeyDilution
+    itxn_field VoteLast
+    itxn_field VoteFirst
+    itxn_field StateProofPK
+    itxn_field SelectionPK
+    itxn_field VotePK
+    // staking_escrow.py:367
+    // itxn.KeyRegistration(
+    intc_2 // keyreg
+    itxn_field TypeEnum
+    // staking_escrow.py:374
+    // fee=0,
+    intc_0 // 0
+    itxn_field Fee
+    // staking_escrow.py:367-375
+    // itxn.KeyRegistration(
+    //     vote_key=vote_pk,
+    //     selection_key=sel_pk,
+    //     state_proof_key=sp_pk,
+    //     vote_first=vote_first,
+    //     vote_last=vote_last,
+    //     vote_key_dilution=vote_kd,
+    //     fee=0,
+    // ).submit()
+    itxn_submit
+    // staking_escrow.py:376
+    // self.is_online = UInt64(1)
+    bytec 4 // "is_online"
+    intc_1 // 1
+    app_global_put
+    // staking_escrow.py:335
+    // @abimethod()
+    intc_1 // 1
+    return
+
+
+// staking_escrow.StakingEscrow.go_offline[routing]() -> void:
+go_offline:
+    // staking_escrow.py:381
+    // self._assert_admin()
+    callsub _assert_admin
+    // staking_escrow.py:382
+    // assert self.sprout_asa_id != 0, "not bootstrapped"  # M-A
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    assert // not bootstrapped
+    // staking_escrow.py:383
+    // itxn.KeyRegistration(fee=0).submit()
+    itxn_begin
+    intc_2 // keyreg
+    itxn_field TypeEnum
+    intc_0 // 0
+    itxn_field Fee
+    itxn_submit
+    // staking_escrow.py:384
+    // self.is_online = UInt64(0)
+    bytec 4 // "is_online"
+    intc_0 // 0
+    app_global_put
+    // staking_escrow.py:378
+    // @abimethod()
+    intc_1 // 1
+    return
+
+
+// staking_escrow.StakingEscrow.discard_unbootstrapped[routing]() -> void:
 discard_unbootstrapped:
-    // governance.py:346
+    // staking_escrow.py:406
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // governance.py:347
-    // assert self.bootstrapped == 0, "already bootstrapped: use admin_close"
+    // staking_escrow.py:407
+    // assert self.sprout_asa_id == 0, "already bootstrapped: use admin_close"
     intc_0 // 0
-    bytec 7 // "bootstrapped"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
-    assert // check self.bootstrapped exists
+    assert // check self.sprout_asa_id exists
     !
     assert // already bootstrapped: use admin_close
-    // governance.py:349-354
+    // staking_escrow.py:409-415
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1321,27 +869,29 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:350
+    // staking_escrow.py:411
     // receiver=Global.creator_address,
     global CreatorAddress
-    // governance.py:352
+    // staking_escrow.py:413
     // close_remainder_to=Global.creator_address,
     dup
     itxn_field CloseRemainderTo
-    // governance.py:351
+    // staking_escrow.py:412
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:349
+    // staking_escrow.py:409-410
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:353
+    // staking_escrow.py:414
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:349-354
+    // staking_escrow.py:409-415
+    // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1349,79 +899,93 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:334
+    // staking_escrow.py:390
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
 
 
-// governance.Governance.admin_close[routing]() -> void:
+// staking_escrow.StakingEscrow.admin_close[routing]() -> void:
 admin_close:
-    // governance.py:365
+    // staking_escrow.py:434
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:366
-    // held = self._sprout().balance(Global.current_application_address)
-    global CurrentApplicationAddress
-    // governance.py:90
-    // return Asset(self.sprout_asa_id)
+    // staking_escrow.py:435
+    // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
-    bytec 5 // "sprout_asa_id"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // governance.py:366
-    // held = self._sprout().balance(Global.current_application_address)
-    swap
-    dig 1
-    asset_holding_get AssetBalance
-    assert // account opted into asset
-    // governance.py:367
-    // assert held == 0, "unstake all voter Sprout before closing"
+    assert // not bootstrapped
+    // staking_escrow.py:437-439
+    // # SAFETY GATE: all Sprout must be back in the contract (principal fully
+    // # redeemed). Equivalent to sprout_held == SUPPLY_BASE.
+    // assert self._accounted_principal() == 0, "principal outstanding: depositors still owed"
+    callsub _accounted_principal
     !
-    assert // unstake all voter Sprout before closing
-    // governance.py:369-375
-    // itxn.AssetTransfer(
-    //     xfer_asset=self.sprout_asa_id,
-    //     asset_receiver=self.admin,
-    //     asset_amount=0,
-    //     asset_close_to=self.admin,
+    assert // principal outstanding: depositors still owed
+    // staking_escrow.py:441-443
+    // # Must be OFFLINE before closing — never tear down an account that is still
+    // # registered for consensus.
+    // assert self.is_online == 0, "go offline before closing"
+    intc_0 // 0
+    bytec 4 // "is_online"
+    app_global_get_ex
+    assert // check self.is_online exists
+    !
+    assert // go offline before closing
+    // staking_escrow.py:445-455
+    // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
+    // # supply (guaranteed by principal == 0 above), so this destroy is authorized
+    // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
+    // # asset — a creator cannot close while its asset exists, and cannot shed it
+    // # any other way. This drops the per-ASA MBR so the account can fully close.
+    // # (An AssetConfig with only config_asset set and no new roles is the destroy
+    // # op; the inner txn sender is the app account = the manager.)
+    // itxn.AssetConfig(
+    //     config_asset=self.sprout_asa_id,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:371
-    // asset_receiver=self.admin,
+    // staking_escrow.py:453
+    // config_asset=self.sprout_asa_id,
     intc_0 // 0
-    bytec 8 // "admin"
+    bytec_0 // "sprout_asa_id"
     app_global_get_ex
-    assert // check self.admin exists
-    dup
-    itxn_field AssetCloseTo
-    // governance.py:372
-    // asset_amount=0,
-    intc_0 // 0
-    itxn_field AssetAmount
-    dup
-    itxn_field AssetReceiver
-    swap
-    itxn_field XferAsset
-    // governance.py:369
-    // itxn.AssetTransfer(
-    pushint 4 // axfer
+    assert // check self.sprout_asa_id exists
+    itxn_field ConfigAsset
+    // staking_escrow.py:445-452
+    // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
+    // # supply (guaranteed by principal == 0 above), so this destroy is authorized
+    // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
+    // # asset — a creator cannot close while its asset exists, and cannot shed it
+    // # any other way. This drops the per-ASA MBR so the account can fully close.
+    // # (An AssetConfig with only config_asset set and no new roles is the destroy
+    // # op; the inner txn sender is the app account = the manager.)
+    // itxn.AssetConfig(
+    pushint 3 // acfg
     itxn_field TypeEnum
-    // governance.py:374
+    // staking_escrow.py:454
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:369-375
-    // itxn.AssetTransfer(
-    //     xfer_asset=self.sprout_asa_id,
-    //     asset_receiver=self.admin,
-    //     asset_amount=0,
-    //     asset_close_to=self.admin,
+    // staking_escrow.py:445-455
+    // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
+    // # supply (guaranteed by principal == 0 above), so this destroy is authorized
+    // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
+    // # asset — a creator cannot close while its asset exists, and cannot shed it
+    // # any other way. This drops the per-ASA MBR so the account can fully close.
+    // # (An AssetConfig with only config_asset set and no new roles is the destroy
+    // # op; the inner txn sender is the app account = the manager.)
+    // itxn.AssetConfig(
+    //     config_asset=self.sprout_asa_id,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:376-381
+    // staking_escrow.py:457-465
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1429,22 +993,34 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_begin
+    // staking_escrow.py:461
+    // receiver=self.admin,
+    intc_0 // 0
+    bytec_3 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
     dup
     itxn_field CloseRemainderTo
-    // governance.py:378
+    // staking_escrow.py:462
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:376
+    // staking_escrow.py:457-460
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:380
+    // staking_escrow.py:464
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:376-381
+    // staking_escrow.py:457-465
+    // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
+    // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
+    // # to the admin in one step.
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1452,24 +1028,21 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:358
+    // staking_escrow.py:417
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
 
 
-// governance.Governance.get_epoch[routing]() -> void:
-get_epoch:
-    // governance.py:387
-    // return self.epoch_id
-    intc_0 // 0
-    bytec_1 // "epoch_id"
-    app_global_get_ex
-    assert // check self.epoch_id exists
-    // governance.py:385
+// staking_escrow.StakingEscrow.get_principal[routing]() -> void:
+get_principal:
+    // staking_escrow.py:481
+    // return self._accounted_principal()
+    callsub _accounted_principal
+    // staking_escrow.py:479
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_1 // 0x151f7c75
     swap
     concat
     log
@@ -1477,183 +1050,142 @@ get_epoch:
     return
 
 
-// governance.Governance.get_pool[routing]() -> void:
-get_pool:
-    // governance.py:391
-    // return self.pool_micro
-    intc_0 // 0
-    bytec 10 // "pool_micro"
-    app_global_get_ex
-    assert // check self.pool_micro exists
-    // governance.py:389
-    // @abimethod(readonly=True)
-    itob
-    bytec_2 // 0x151f7c75
+// staking_escrow.StakingEscrow.get_surplus[routing]() -> void:
+get_surplus:
+    // staking_escrow.py:485-487
+    // # Mirrors harvest's floor exactly (principal + mbr + buffer) so the UI
+    // # never shows harvestable surplus that harvest would refuse.
+    // app_bal = Global.current_application_address.balance
+    global CurrentApplicationAddress
+    acct_params_get AcctBalance
     swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-
-// governance.Governance.get_staked[routing]() -> void:
-get_staked:
-    // governance.py:393
-    // @abimethod(readonly=True)
-    txna ApplicationArgs 1
     dup
-    len
-    intc_3 // 32
-    ==
-    assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // governance.py:395
-    // if who.native in self.voters:
-    bytec_0 // 0x763a
-    swap
-    concat
+    uncover 2
+    assert // account funded
+    // staking_escrow.py:488
+    // floor = self._harvest_floor()
+    callsub _harvest_floor
     dup
-    box_len
-    bury 1
-    bz get_staked_after_if_else@3
-    // governance.py:396
-    // s: UInt64 = self.voters[who.native].staked.native
-    box_get
-    assert // check self.voters entry exists
-    intc_0 // 0
-    extract_uint64
-
-get_staked_after_inlined_governance.Governance.get_staked@4:
-    // governance.py:393
-    // @abimethod(readonly=True)
-    itob
-    bytec_2 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
-
-get_staked_after_if_else@3:
-    pop
-    // governance.py:398
+    cover 2
+    // staking_escrow.py:489
+    // if app_bal <= floor:
+    <=
+    bz get_surplus_after_if_else@3
+    popn 2
+    // staking_escrow.py:490
     // return UInt64(0)
     intc_0 // 0
-    // governance.py:393
-    // @abimethod(readonly=True)
-    b get_staked_after_inlined_governance.Governance.get_staked@4
 
-
-// governance.Governance.get_candidate_weight[routing]() -> void:
-get_candidate_weight:
-    // governance.py:400
-    // @abimethod(readonly=True)
-    txna ApplicationArgs 1
-    dup
-    len
-    intc_2 // 8
-    ==
-    assert // invalid number of bytes for arc4.uint64
-    btoi
-    // governance.py:402
-    // if candidate_id in self.candidates:
-    itob
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    box_len
-    bury 1
-    bz get_candidate_weight_after_if_else@3
-    // governance.py:403
-    // w: UInt64 = self.candidates[candidate_id].weight.native
-    box_get
-    assert // check self.candidates entry exists
-    intc_3 // 32
-    extract_uint64
-
-get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4:
-    // governance.py:400
+get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4:
+    // staking_escrow.py:483
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_1 // 0x151f7c75
     swap
     concat
     log
     intc_1 // 1
     return
 
-get_candidate_weight_after_if_else@3:
-    pop
-    // governance.py:405
-    // return UInt64(0)
-    intc_0 // 0
-    // governance.py:400
+get_surplus_after_if_else@3:
+    // staking_escrow.py:491
+    // return app_bal - floor
+    -
+    // staking_escrow.py:483
     // @abimethod(readonly=True)
-    b get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4
+    b get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4
 
 
-// governance.Governance._assert_admin() -> void:
+// staking_escrow.StakingEscrow.get_state[routing]() -> void:
+get_state:
+    // staking_escrow.py:495-496
+    // # Returns sprout_asa_id for convenience (0 if not bootstrapped).
+    // return self.sprout_asa_id
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    // staking_escrow.py:493
+    // @abimethod(readonly=True)
+    itob
+    bytec_1 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+
+// staking_escrow.StakingEscrow._accounted_principal() -> uint64:
+_accounted_principal:
+    // staking_escrow.py:95-100
+    // # Balance of the app's own holding of the Sprout ASA.
+    // # No opt-in assertion: the escrow is the ASA CREATOR, so bootstrap's
+    // # AssetConfig lands the full supply in the app account and opts it in
+    // # atomically (see H-A). There is no reachable state where the app holds
+    // # Sprout but is not opted in, so a check here would be dead code.
+    // return self._sprout().balance(Global.current_application_address)
+    global CurrentApplicationAddress
+    // staking_escrow.py:91
+    // return Asset(self.sprout_asa_id)
+    intc_0 // 0
+    bytec_0 // "sprout_asa_id"
+    app_global_get_ex
+    assert // check self.sprout_asa_id exists
+    // staking_escrow.py:95-100
+    // # Balance of the app's own holding of the Sprout ASA.
+    // # No opt-in assertion: the escrow is the ASA CREATOR, so bootstrap's
+    // # AssetConfig lands the full supply in the app account and opts it in
+    // # atomically (see H-A). There is no reachable state where the app holds
+    // # Sprout but is not opted in, so a check here would be dead code.
+    // return self._sprout().balance(Global.current_application_address)
+    asset_holding_get AssetBalance
+    assert // account opted into asset
+    // staking_escrow.py:104-106
+    // # The ALGO principal contributors can still reclaim.
+    // # = total supply minus whatever Sprout the contract still holds.
+    // return SUPPLY_BASE - self._sprout_held()
+    intc 4 // 10000000000000000
+    swap
+    -
+    retsub
+
+
+// staking_escrow.StakingEscrow._harvest_floor() -> uint64:
+_harvest_floor:
+    // staking_escrow.py:123-126
+    // # Single source of truth for the line harvest must never cross.
+    // # Everything below this stays in the escrow: principal (owed to depositors),
+    // # the live MBR (so the account keeps functioning), and the C1 buffer.
+    // return self._accounted_principal() + self._live_mbr() + HARVEST_BUFFER
+    callsub _accounted_principal
+    // staking_escrow.py:110-112
+    // # Live minimum balance of the app account (base + per-ASA + any boxes).
+    // # Read from the ledger, NEVER hardcoded, so a protocol MBR change can't strand funds.
+    // return Global.current_application_address.min_balance
+    global CurrentApplicationAddress
+    acct_params_get AcctMinBalance
+    assert // account funded
+    // staking_escrow.py:123-126
+    // # Single source of truth for the line harvest must never cross.
+    // # Everything below this stays in the escrow: principal (owed to depositors),
+    // # the live MBR (so the account keeps functioning), and the C1 buffer.
+    // return self._accounted_principal() + self._live_mbr() + HARVEST_BUFFER
+    +
+    pushint 1000000
+    +
+    retsub
+
+
+// staking_escrow.StakingEscrow._assert_admin() -> void:
 _assert_admin:
-    // governance.py:86
+    // staking_escrow.py:130
     // assert Txn.sender == self.admin, "admin only"
     txn Sender
     intc_0 // 0
-    bytec 8 // "admin"
+    bytec_3 // "admin"
     app_global_get_ex
     assert // check self.admin exists
     ==
     assert // admin only
-    retsub
-
-
-// governance.Governance._sub_weight(cid: uint64, delta: uint64) -> void:
-_sub_weight:
-    // governance.py:98-99
-    // @subroutine
-    // def _sub_weight(self, cid: UInt64, delta: UInt64) -> None:
-    proto 2 0
-    // governance.py:100
-    // c = self.candidates[cid].copy()
-    frame_dig -2
-    itob
-    bytec 4 // 0x633a
-    swap
-    concat
-    dup
-    box_get
-    assert // check self.candidates entry exists
-    // governance.py:101-102
-    // # Clamp defensively; by invariant delta <= c.weight always.
-    // w: UInt64 = c.weight.native
-    intc_3 // 32
-    extract_uint64
-    dup
-    cover 2
-    // governance.py:103
-    // new_w = UInt64(0)
-    intc_0 // 0
-    cover 2
-    // governance.py:104
-    // if w >= delta:
-    frame_dig -1
-    >=
-    bz _sub_weight_after_if_else@2
-    // governance.py:105
-    // new_w = w - delta
-    frame_dig 0
-    frame_dig -1
-    -
-    frame_bury 1
-
-_sub_weight_after_if_else@2:
-    // governance.py:106
-    // c.weight = ArcU64(new_w)
-    frame_dig 1
-    itob
-    // governance.py:106-107
-    // c.weight = ArcU64(new_w)
-    // self.candidates[cid] = c.copy()
-    intc_3 // 32
-    swap
-    box_replace // on error: index out of bounds
     retsub
