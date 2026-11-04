@@ -61,6 +61,8 @@ export async function stake({ signTransactions, address, microSprout }) {
     sender: address, suggestedParams: await getSp(1000),
     appIndex: GOV_APP_ID, appArgs: buildAppArgs(m, []),
     foreignAssets: [SPROUT_ASA_ID],
+    // stake writes the caller's voter box — it must be declared.
+    boxes: [{ appIndex: GOV_APP_ID, name: boxName('v:', algosdk.decodeAddress(address).publicKey) }],
   })
   algosdk.assignGroupID([axfer, appCall])
   return signSend(signTransactions, [axfer, appCall], appCall.txID())
