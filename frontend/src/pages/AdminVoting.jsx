@@ -12,7 +12,7 @@ import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import { algodClient, ADMIN_ADDRESS } from '../utils/algorand'
 import { useToast } from '../context/ToastContext'
-import { deployAndBootstrap, closeGovernance } from '../utils/governanceDeploy'
+import { deployAndBootstrap, closeGovernance, discardUnbootstrapped } from '../utils/governanceDeploy'
 import {
   stake, unstake, vote, openEpoch, registerCandidate,
   finalize, fetchStaked, fetchPool, fetchCandidateWeight, buildRanking, IDS,
@@ -60,7 +60,6 @@ export default function AdminVoting() {
   const [voteClose, setVoteClose] = useState('')
   const [tallyRound, setTallyRound] = useState('')
   // candidate
-  const [candId, setCandId] = useState('')
   const [dirId, setDirId] = useState('')
   const [payoutAddr, setPayoutAddr] = useState('')
   // stake/vote (admin testing)
@@ -144,17 +143,17 @@ export default function AdminVoting() {
         <Note>Use current round + offsets for testing (e.g. open=now, close=now+small, tally=now+bigger).</Note>
       </Card>
 
-      {/* Register candidate */}
+      {/* Register candidate — one ID: the directory entry id is the candidate id */}
       <Card title="3. Register candidate">
-        <Row>
-          <Field label="candidate_id"><input className="input" value={candId} onChange={e => setCandId(e.target.value)} /></Field>
-          <Field label="directory_entry_id"><input className="input" value={dirId} onChange={e => setDirId(e.target.value)} /></Field>
-        </Row>
+        <Field label="directory_entry_id (also the candidate id)">
+          <input className="input" value={dirId} onChange={e => setDirId(e.target.value)} />
+        </Field>
         <Field label="payout address"><input className="input" value={payoutAddr} onChange={e => setPayoutAddr(e.target.value.trim())} /></Field>
         <button className="btn" disabled={!!busy} onClick={() => run('cand', () =>
-          registerCandidate({ signTransactions, address: activeAddress, candidateId: Number(candId), directoryEntryId: Number(dirId), payoutAddr }))}>
+          registerCandidate({ signTransactions, address: activeAddress, directoryEntryId: Number(dirId), payoutAddr }))}>
           {busy === 'cand' ? 'Registering…' : 'Register candidate'}
         </button>
+        <Note>In production this becomes a dropdown of approved+fundable directory entries; the id and payout address auto-fill.</Note>
       </Card>
 
       {/* Stake + allocate (admin self-test) */}
@@ -213,13 +212,26 @@ export default function AdminVoting() {
 
       {/* Close */}
       <Card title="Close & recover (danger)" danger>
-        <Note>Requires all voter Sprout unstaked (app holds zero Sprout). Opts out + closes to admin + deletes.</Note>
+        <Note>
+          <strong>Bootstrapped app:</strong> requires all voter Sprout unstaked (app holds zero Sprout);
+          opts out + closes to admin + deletes.<br />
+          <strong>Unbootstrapped shell</strong> (a deploy that failed at bootstrap): use "Discard shell"
+          to recover its ~1 ALGO — creator-only, works without admin being set.
+        </Note>
         <Field label="Gov App ID"><input className="input" value={closeAppId} onChange={e => setCloseAppId(e.target.value.trim())} /></Field>
-        <Field label="Type CLOSE"><input className="input" value={closeConfirm} onChange={e => setCloseConfirm(e.target.value)} /></Field>
-        <button className="btn" style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}
-          disabled={!canClose} onClick={doClose}>
-          {busy === 'close' ? 'Closing…' : 'Close + recover'}
-        </button>
+        <Field label="Type CLOSE (bootstrapped apps only)"><input className="input" value={closeConfirm} onChange={e => setCloseConfirm(e.target.value)} /></Field>
+        <Row>
+          <button className="btn" style={{ background: 'var(--danger)', color: '#fff', borderColor: 'var(--danger)' }}
+            disabled={!canClose} onClick={doClose}>
+            {busy === 'close' ? 'Closing…' : 'Close + recover (bootstrapped)'}
+          </button>
+          <button className="btn btn-ghost"
+            disabled={!/^\d+$/.test(closeAppId) || !!busy}
+            onClick={() => run('discard', () =>
+              discardUnbootstrapped({ signTransactions, sender: activeAddress, appId: Number(closeAppId) }))}>
+            {busy === 'discard' ? 'Discarding…' : 'Discard shell (unbootstrapped)'}
+          </button>
+        </Row>
       </Card>
     </Shell>
   )

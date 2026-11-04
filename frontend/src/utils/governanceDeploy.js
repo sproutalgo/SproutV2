@@ -128,3 +128,24 @@ export async function closeGovernance({ signTransactions, sender, appId, adminAd
   const [signed] = await signTransactions([algosdk.encodeUnsignedTransaction(txn)])
   return sendAndConfirm([signed], txId)
 }
+
+// discard_unbootstrapped — recover an app whose bootstrap FAILED (creator-only).
+// For a shell that never bootstrapped (no admin, never opted into Sprout). Closes
+// the ~1 ALGO funding back to the creator and deletes the app. No resource refs
+// needed (no ASA holding). DeleteApplication call; fee 2000 covers the inner close.
+export async function buildDiscardTxn({ sender, appId }) {
+  const sp = await getSp(2000)
+  const m = method('discard_unbootstrapped')
+  const txn = algosdk.makeApplicationDeleteTxnFromObject({
+    sender, suggestedParams: sp, appIndex: Number(appId),
+    appArgs: buildAppArgs(m, []),
+    accounts: [sender],   // the inner close pays the creator (= sender)
+  })
+  return { txn, txId: txn.txID() }
+}
+
+export async function discardUnbootstrapped({ signTransactions, sender, appId }) {
+  const { txn, txId } = await buildDiscardTxn({ sender, appId })
+  const [signed] = await signTransactions([algosdk.encodeUnsignedTransaction(txn)])
+  return sendAndConfirm([signed], txId)
+}

@@ -119,13 +119,14 @@ export async function openEpoch({ signTransactions, address, voteOpen, voteClose
   return signSend(signTransactions, [appCall], appCall.txID())
 }
 
-export async function registerCandidate({ signTransactions, address, candidateId, directoryEntryId, payoutAddr }) {
+// One ID end to end: the directory entry id IS the candidate key.
+export async function registerCandidate({ signTransactions, address, directoryEntryId, payoutAddr }) {
   const m = method('register_candidate')
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address, suggestedParams: await getSp(1000),
     appIndex: GOV_APP_ID,
-    appArgs: buildAppArgs(m, [BigInt(candidateId), BigInt(directoryEntryId), payoutAddr]),
-    boxes: [{ appIndex: GOV_APP_ID, name: boxName('c:', uint64Bytes(candidateId)) }],
+    appArgs: buildAppArgs(m, [BigInt(directoryEntryId), payoutAddr]),
+    boxes: [{ appIndex: GOV_APP_ID, name: boxName('c:', uint64Bytes(directoryEntryId)) }],
   })
   return signSend(signTransactions, [appCall], appCall.txID())
 }

@@ -56,7 +56,8 @@ class VoterBox(Struct):
 
 
 class CandidateBox(Struct):
-    directory_entry_id: ArcU64
+    # Keyed by the directory_entry_id itself (no separate candidate_id) — one ID
+    # end to end. The box key IS the directory entry id.
     payout_addr: Address
     weight: ArcU64            # RUNNING total weight backing this candidate
 
@@ -152,20 +153,20 @@ class Governance(ARC4Contract):
         return self.epoch_id
 
     @abimethod()
-    def register_candidate(self, candidate_id: UInt64, directory_entry_id: UInt64, payout_addr: Address) -> None:
-        """Admit a candidate (admin only). Locked once voting is open — candidates
-        are fixed for the epoch (no additions/removals until finalize)."""
+    def register_candidate(self, directory_entry_id: UInt64, payout_addr: Address) -> None:
+        """Admit a candidate (admin only). The directory_entry_id IS the candidate
+        key — one ID end to end. Locked once voting is open — candidates are fixed
+        for the epoch (no additions/removals until finalize)."""
         self._assert_admin()
         assert self.epoch_id > 0, "no epoch"
         assert self.phase == 0, "voting not open"
         assert Global.round < self.vote_open, "candidates lock at voting open"
         assert self.candidate_count < MAX_CANDIDATES, "candidate limit reached"
-        assert candidate_id != 0, "candidate id must be nonzero"
-        assert candidate_id not in self.candidates, "candidate exists"
+        assert directory_entry_id != 0, "directory entry id must be nonzero"
+        assert directory_entry_id not in self.candidates, "candidate exists"
         assert payout_addr.native != Global.zero_address, "payout addr required"
 
-        self.candidates[candidate_id] = CandidateBox(
-            directory_entry_id=ArcU64(directory_entry_id),
+        self.candidates[directory_entry_id] = CandidateBox(
             payout_addr=payout_addr,
             weight=ArcU64(0),
         )
@@ -327,6 +328,30 @@ class Governance(ARC4Contract):
 
         self.phase = UInt64(2)
         return winners
+
+    # ── discard an unbootstrapped shell (creator-only) ─────────────────────────
+
+    @abimethod(allow_actions=["DeleteApplication"])
+    def discard_unbootstrapped(self) -> None:
+        """Delete an app that was CREATED but never bootstrapped (creator-only).
+
+        Guards the "created but bootstrap failed -> stuck forever" trap: before
+        bootstrap, admin is the zero address, so admin_close's admin check can never
+        pass and the app's ~1 ALGO funding would be stranded. This lets the original
+        creator recover it. Strictly limited to the pre-bootstrap state (bootstrapped
+        == 0) so it can NEVER run on a live governance app holding voter stake. Also
+        safe on the ASA front: an unbootstrapped app never opted into Sprout, so there
+        is no holding to clear — just close the ALGO account to the creator.
+        """
+        assert Txn.sender == Global.creator_address, "creator only"
+        assert self.bootstrapped == 0, "already bootstrapped: use admin_close"
+
+        itxn.Payment(
+            receiver=Global.creator_address,
+            amount=0,
+            close_remainder_to=Global.creator_address,
+            fee=0,
+        ).submit()
 
     # ── admin close / recover (testing teardown) ───────────────────────────────
 
