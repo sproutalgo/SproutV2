@@ -71,7 +71,11 @@ export default function AdminVoting() {
   const [pool, setPool] = useState(null)
   const [myStake, setMyStake] = useState(null)
 
-  const isAdmin = activeAddress && ADMIN_ADDRESS && activeAddress === ADMIN_ADDRESS
+  // TESTING: page open to any connected wallet (was gated to VITE_ADMIN_ADDRESS).
+  // The CONTRACT still enforces real admin/creator checks on-chain, so admin-only
+  // actions (open_epoch, register_candidate, close) still fail for non-admin wallets —
+  // this only opens the UI so other wallets can stake/vote for multi-wallet testing.
+  const isAdmin = !!activeAddress
 
   useEffect(() => { if (activeAddress) setAdminAddr(p => p || activeAddress) }, [activeAddress])
   useEffect(() => {
