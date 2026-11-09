@@ -318,7 +318,11 @@ class Governance(ARC4Contract):
             if w >= cutoff and w > 0:
                 winners += 1
             i += 1
-        assert winners > 0, "no votes cast"
+        # NOTE: winners may be 0 (nobody voted). That is a VALID finalize — it pays
+        # nobody and the pool carries forward — NOT a revert. Reverting here would
+        # leave the candidate boxes undeletable and permanently block admin_close
+        # (the "register candidates, nobody votes" lock). So we proceed and only
+        # skip the payout when there are no winners.
 
         # 3) Compute the pool LIVE, now, at tally — = balance - MBR - buffer. This
         #    captures all staking rewards that flowed in during the epoch. A small
@@ -332,20 +336,22 @@ class Governance(ARC4Contract):
             pool = bal - floor
 
         # Equal split among winners. Dust (pool mod winners) stays and carries over.
-        share = pool // winners
-        if share > 0:
-            i = UInt64(0)
-            while i < n:
-                cid = ranked_candidate_ids[i].native
-                w = self.candidates[cid].weight.native
-                if w >= cutoff and w > 0:
-                    c = self.candidates[cid].copy()
-                    itxn.Payment(
-                        receiver=c.payout_addr.native,
-                        amount=share,
-                        fee=0,
-                    ).submit()
-                i += 1
+        # Guard the division: winners can be 0, in which case there is no payout.
+        if winners > 0:
+            share = pool // winners
+            if share > 0:
+                i = UInt64(0)
+                while i < n:
+                    cid = ranked_candidate_ids[i].native
+                    w = self.candidates[cid].weight.native
+                    if w >= cutoff and w > 0:
+                        c = self.candidates[cid].copy()
+                        itxn.Payment(
+                            receiver=c.payout_addr.native,
+                            amount=share,
+                            fee=0,
+                        ).submit()
+                    i += 1
 
         # Box hygiene: the epoch is over, so delete every candidate box to release
         # its MBR. ranked_candidate_ids lists all candidates (asserted == count), so

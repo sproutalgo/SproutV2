@@ -81,7 +81,7 @@ main_switch_case_next@7:
     err
 
 main_admin_close_route@6:
-    // governance.py:388
+    // governance.py:394
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -92,7 +92,7 @@ main_admin_close_route@6:
     b admin_close
 
 main_discard_unbootstrapped_route@5:
-    // governance.py:364
+    // governance.py:370
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -1163,11 +1163,7 @@ finalize_after_if_else@13:
     b finalize_while_top@9
 
 finalize_after_while@14:
-    // governance.py:321
-    // assert winners > 0, "no votes cast"
-    dup
-    assert // no votes cast
-    // governance.py:323-327
+    // governance.py:327-331
     // # 3) Compute the pool LIVE, now, at tally — = balance - MBR - buffer. This
     // #    captures all staking rewards that flowed in during the epoch. A small
     // #    buffer stays above MBR so the account keeps functioning and the inner
@@ -1180,26 +1176,26 @@ finalize_after_while@14:
     cover 2
     bury 14
     assert // account funded
-    // governance.py:328
+    // governance.py:332
     // mbr = Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // governance.py:329
+    // governance.py:333
     // floor = mbr + POOL_BUFFER
     intc 4 // 100000
     +
     dup
     bury 12
-    // governance.py:330
+    // governance.py:334
     // pool = UInt64(0)
     intc_0 // 0
     bury 11
-    // governance.py:331
+    // governance.py:335
     // if bal > floor:
     >
     bz finalize_after_if_else@16
-    // governance.py:332
+    // governance.py:336
     // pool = bal - floor
     dig 11
     dig 10
@@ -1207,30 +1203,35 @@ finalize_after_while@14:
     bury 9
 
 finalize_after_if_else@16:
-    // governance.py:334-335
+    // governance.py:338-340
     // # Equal split among winners. Dust (pool mod winners) stays and carries over.
+    // # Guard the division: winners can be 0, in which case there is no payout.
+    // if winners > 0:
+    dup
+    bz finalize_after_if_else@27
+    // governance.py:341
     // share = pool // winners
     dig 8
     dig 1
     /
     dup
     bury 9
-    // governance.py:336
+    // governance.py:342
     // if share > 0:
-    bz finalize_after_if_else@25
-    // governance.py:337
+    bz finalize_after_if_else@27
+    // governance.py:343
     // i = UInt64(0)
     intc_0 // 0
     bury 5
 
-finalize_while_top@18:
-    // governance.py:338
+finalize_while_top@19:
+    // governance.py:344
     // while i < n:
     dig 4
     dig 2
     <
-    bz finalize_after_if_else@25
-    // governance.py:339
+    bz finalize_after_if_else@27
+    // governance.py:345
     // cid = ranked_candidate_ids[i].native
     dig 4
     intc_2 // 8
@@ -1239,7 +1240,7 @@ finalize_while_top@18:
     swap
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    // governance.py:340
+    // governance.py:346
     // w = self.candidates[cid].weight.native
     bytec_3 // 0x633a
     swap
@@ -1252,40 +1253,40 @@ finalize_while_top@18:
     extract_uint64
     dup
     bury 8
-    // governance.py:341
+    // governance.py:347
     // if w >= cutoff and w > 0:
     dig 4
     >=
-    bz finalize_after_if_else@23
+    bz finalize_after_if_else@24
     dig 6
-    bz finalize_after_if_else@23
-    // governance.py:342
+    bz finalize_after_if_else@24
+    // governance.py:348
     // c = self.candidates[cid].copy()
     dig 12
     box_get
     assert // check self.candidates entry exists
-    // governance.py:343-347
+    // governance.py:349-353
     // itxn.Payment(
     //     receiver=c.payout_addr.native,
     //     amount=share,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:344
+    // governance.py:350
     // receiver=c.payout_addr.native,
     extract 0 32
     dig 8
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:343
+    // governance.py:349
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:346
+    // governance.py:352
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:343-347
+    // governance.py:349-353
     // itxn.Payment(
     //     receiver=c.payout_addr.native,
     //     amount=share,
@@ -1293,33 +1294,33 @@ finalize_while_top@18:
     // ).submit()
     itxn_submit
 
-finalize_after_if_else@23:
-    // governance.py:348
+finalize_after_if_else@24:
+    // governance.py:354
     // i += 1
     dig 4
     intc_1 // 1
     +
     bury 5
-    b finalize_while_top@18
+    b finalize_while_top@19
 
-finalize_after_if_else@25:
+finalize_after_if_else@27:
     uncover 3
     pop
-    // governance.py:350-353
+    // governance.py:356-359
     // # Box hygiene: the epoch is over, so delete every candidate box to release
     // # its MBR. ranked_candidate_ids lists all candidates (asserted == count), so
     // # this clears them all. The app can then close once voter boxes are gone too.
     // j = UInt64(0)
     intc_0 // 0
 
-finalize_while_top@26:
-    // governance.py:354
+finalize_while_top@28:
+    // governance.py:360
     // while j < n:
     dup
     dig 3
     <
-    bz finalize_after_while@28
-    // governance.py:355
+    bz finalize_after_while@30
+    // governance.py:361
     // del self.candidates[ranked_candidate_ids[j].native]
     dup
     intc_2 // 8
@@ -1333,20 +1334,20 @@ finalize_while_top@26:
     concat
     box_del
     pop
-    // governance.py:356
+    // governance.py:362
     // j += 1
     intc_1 // 1
     +
-    b finalize_while_top@26
+    b finalize_while_top@28
 
-finalize_after_while@28:
+finalize_after_while@30:
     pop
-    // governance.py:357
+    // governance.py:363
     // self.candidate_count = UInt64(0)
     bytec 5 // "candidate_count"
     intc_0 // 0
     app_global_put
-    // governance.py:359
+    // governance.py:365
     // self.phase = UInt64(2)
     bytec 4 // "phase"
     pushint 2
@@ -1364,13 +1365,13 @@ finalize_after_while@28:
 
 // governance.Governance.discard_unbootstrapped[routing]() -> void:
 discard_unbootstrapped:
-    // governance.py:376
+    // governance.py:382
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // governance.py:377
+    // governance.py:383
     // assert self.bootstrapped == 0, "already bootstrapped: use admin_close"
     intc_0 // 0
     bytec 7 // "bootstrapped"
@@ -1378,7 +1379,7 @@ discard_unbootstrapped:
     assert // check self.bootstrapped exists
     !
     assert // already bootstrapped: use admin_close
-    // governance.py:379-384
+    // governance.py:385-390
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1386,27 +1387,27 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:380
+    // governance.py:386
     // receiver=Global.creator_address,
     global CreatorAddress
-    // governance.py:382
+    // governance.py:388
     // close_remainder_to=Global.creator_address,
     dup
     itxn_field CloseRemainderTo
-    // governance.py:381
+    // governance.py:387
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:379
+    // governance.py:385
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:383
+    // governance.py:389
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:379-384
+    // governance.py:385-390
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1414,7 +1415,7 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:364
+    // governance.py:370
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -1422,10 +1423,10 @@ discard_unbootstrapped:
 
 // governance.Governance.admin_close[routing]() -> void:
 admin_close:
-    // governance.py:399
+    // governance.py:405
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:400
+    // governance.py:406
     // held = self._sprout().balance(Global.current_application_address)
     global CurrentApplicationAddress
     // governance.py:92
@@ -1434,17 +1435,17 @@ admin_close:
     bytec 6 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // governance.py:400
+    // governance.py:406
     // held = self._sprout().balance(Global.current_application_address)
     swap
     dig 1
     asset_holding_get AssetBalance
     assert // account opted into asset
-    // governance.py:401
+    // governance.py:407
     // assert held == 0, "unstake all voter Sprout before closing"
     !
     assert // unstake all voter Sprout before closing
-    // governance.py:402
+    // governance.py:408
     // assert self.candidate_count == 0, "finalize the epoch first (clears candidate boxes)"
     intc_0 // 0
     bytec 5 // "candidate_count"
@@ -1452,7 +1453,7 @@ admin_close:
     assert // check self.candidate_count exists
     !
     assert // finalize the epoch first (clears candidate boxes)
-    // governance.py:404-410
+    // governance.py:410-416
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
     //     asset_receiver=self.admin,
@@ -1461,7 +1462,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:406
+    // governance.py:412
     // asset_receiver=self.admin,
     intc_0 // 0
     bytec 8 // "admin"
@@ -1469,7 +1470,7 @@ admin_close:
     assert // check self.admin exists
     dup
     itxn_field AssetCloseTo
-    // governance.py:407
+    // governance.py:413
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -1477,15 +1478,15 @@ admin_close:
     itxn_field AssetReceiver
     swap
     itxn_field XferAsset
-    // governance.py:404
+    // governance.py:410
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // governance.py:409
+    // governance.py:415
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:404-410
+    // governance.py:410-416
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
     //     asset_receiver=self.admin,
@@ -1494,7 +1495,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:411-416
+    // governance.py:417-422
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1504,20 +1505,20 @@ admin_close:
     itxn_begin
     dup
     itxn_field CloseRemainderTo
-    // governance.py:413
+    // governance.py:419
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:411
+    // governance.py:417
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:415
+    // governance.py:421
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:411-416
+    // governance.py:417-422
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1525,7 +1526,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:388
+    // governance.py:394
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -1533,13 +1534,13 @@ admin_close:
 
 // governance.Governance.get_epoch[routing]() -> void:
 get_epoch:
-    // governance.py:422
+    // governance.py:428
     // return self.epoch_id
     intc_0 // 0
     bytec_1 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
-    // governance.py:420
+    // governance.py:426
     // @abimethod(readonly=True)
     itob
     bytec_2 // 0x151f7c75
@@ -1552,7 +1553,7 @@ get_epoch:
 
 // governance.Governance.get_pool[routing]() -> void:
 get_pool:
-    // governance.py:426-427
+    // governance.py:432-433
     // # Live distributable pool = balance - MBR - buffer (what finalize would pay).
     // bal = Global.current_application_address.balance
     global CurrentApplicationAddress
@@ -1561,28 +1562,28 @@ get_pool:
     dup
     uncover 2
     assert // account funded
-    // governance.py:428
+    // governance.py:434
     // mbr = Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // governance.py:429
+    // governance.py:435
     // floor = mbr + POOL_BUFFER
     intc 4 // 100000
     +
     dup
     cover 2
-    // governance.py:430
+    // governance.py:436
     // if bal <= floor:
     <=
     bz get_pool_after_if_else@3
     popn 2
-    // governance.py:431
+    // governance.py:437
     // return UInt64(0)
     intc_0 // 0
 
 get_pool_after_inlined_governance.Governance.get_pool@4:
-    // governance.py:424
+    // governance.py:430
     // @abimethod(readonly=True)
     itob
     bytec_2 // 0x151f7c75
@@ -1593,17 +1594,17 @@ get_pool_after_inlined_governance.Governance.get_pool@4:
     return
 
 get_pool_after_if_else@3:
-    // governance.py:432
+    // governance.py:438
     // p: UInt64 = bal - floor
     -
-    // governance.py:424
+    // governance.py:430
     // @abimethod(readonly=True)
     b get_pool_after_inlined_governance.Governance.get_pool@4
 
 
 // governance.Governance.get_staked[routing]() -> void:
 get_staked:
-    // governance.py:435
+    // governance.py:441
     // @abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -1611,7 +1612,7 @@ get_staked:
     intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // governance.py:437
+    // governance.py:443
     // if who.native in self.voters:
     bytec_0 // 0x763a
     swap
@@ -1620,7 +1621,7 @@ get_staked:
     box_len
     bury 1
     bz get_staked_after_if_else@3
-    // governance.py:438
+    // governance.py:444
     // s: UInt64 = self.voters[who.native].staked.native
     box_get
     assert // check self.voters entry exists
@@ -1628,7 +1629,7 @@ get_staked:
     extract_uint64
 
 get_staked_after_inlined_governance.Governance.get_staked@4:
-    // governance.py:435
+    // governance.py:441
     // @abimethod(readonly=True)
     itob
     bytec_2 // 0x151f7c75
@@ -1640,17 +1641,17 @@ get_staked_after_inlined_governance.Governance.get_staked@4:
 
 get_staked_after_if_else@3:
     pop
-    // governance.py:440
+    // governance.py:446
     // return UInt64(0)
     intc_0 // 0
-    // governance.py:435
+    // governance.py:441
     // @abimethod(readonly=True)
     b get_staked_after_inlined_governance.Governance.get_staked@4
 
 
 // governance.Governance.get_candidate_weight[routing]() -> void:
 get_candidate_weight:
-    // governance.py:442
+    // governance.py:448
     // @abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -1659,7 +1660,7 @@ get_candidate_weight:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // governance.py:444
+    // governance.py:450
     // if candidate_id in self.candidates:
     itob
     bytec_3 // 0x633a
@@ -1669,7 +1670,7 @@ get_candidate_weight:
     box_len
     bury 1
     bz get_candidate_weight_after_if_else@3
-    // governance.py:445
+    // governance.py:451
     // w: UInt64 = self.candidates[candidate_id].weight.native
     box_get
     assert // check self.candidates entry exists
@@ -1677,7 +1678,7 @@ get_candidate_weight:
     extract_uint64
 
 get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4:
-    // governance.py:442
+    // governance.py:448
     // @abimethod(readonly=True)
     itob
     bytec_2 // 0x151f7c75
@@ -1689,10 +1690,10 @@ get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4:
 
 get_candidate_weight_after_if_else@3:
     pop
-    // governance.py:447
+    // governance.py:453
     // return UInt64(0)
     intc_0 // 0
-    // governance.py:442
+    // governance.py:448
     // @abimethod(readonly=True)
     b get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4
 
