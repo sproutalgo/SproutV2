@@ -171,32 +171,43 @@ export async function fetchStaked(address) {
   }
 }
 
-// Read one candidate box's running weight. ABI layout: directory_entry_id(u64)@0,
-// payout_addr(32 bytes)@8, weight(u64)@40.
-export async function fetchCandidateWeight(candidateId) {
+// Read one candidate box. Current ABI layout (after collapsing the id):
+//   payout_addr(32 bytes)@0, weight(u64)@32.
+export async function fetchCandidate(candidateId) {
   try {
     const name = boxName('c:', uint64Bytes(candidateId))
     const box = await algodClient.getApplicationBoxByName(GOV_APP_ID, name).do()
-    const dv = new DataView(box.value.buffer, box.value.byteOffset, box.value.byteLength)
-    return Number(dv.getBigUint64(40))
+    const bytes = box.value
+    const payoutAddr = algosdk.encodeAddress(bytes.slice(0, 32))
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const weight = Number(dv.getBigUint64(32))
+    return { payoutAddr, weight }
   } catch (e) {
-    return 0
+    return { payoutAddr: null, weight: 0 }
   }
 }
 
-// Build the descending ranking `finalize` needs, by reading each candidate's weight.
-// Returns { rankedIds: [...], payoutAddrs: [...] } sorted by weight DESC.
-export async function buildRanking(candidateIds, candidatePayouts) {
-  const withWeights = []
+// Back-compat weight-only reader.
+export async function fetchCandidateWeight(candidateId) {
+  const { weight } = await fetchCandidate(candidateId)
+  return weight
+}
+
+// Build the descending ranking `finalize` needs. Reads each candidate's weight AND
+// payout address FROM THE ON-CHAIN BOX — never from typed input — so the accounts
+// array passed to finalize always matches exactly what the contract will pay.
+// Returns { rankedIds, payoutAddrs, weights } sorted by weight DESC.
+export async function buildRanking(candidateIds) {
+  const rows = []
   for (const cid of candidateIds) {
-    const w = await fetchCandidateWeight(cid)
-    withWeights.push({ cid, w, payout: candidatePayouts?.[cid] })
+    const { weight, payoutAddr } = await fetchCandidate(cid)
+    rows.push({ cid, weight, payoutAddr })
   }
-  withWeights.sort((a, b) => b.w - a.w)
+  rows.sort((a, b) => b.weight - a.weight)
   return {
-    rankedIds: withWeights.map(x => x.cid),
-    payoutAddrs: withWeights.map(x => x.payout).filter(Boolean),
-    weights: withWeights.map(x => x.w),
+    rankedIds: rows.map(x => x.cid),
+    payoutAddrs: rows.map(x => x.payoutAddr).filter(Boolean),
+    weights: rows.map(x => x.weight),
   }
 }
 
