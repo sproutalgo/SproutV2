@@ -188,26 +188,22 @@ export default function AdminVoting() {
       {/* Tally */}
       <Card title="5. Tally (after tally_round)">
         <Note>
-          Candidate weights are already final (running tallies). Finalize reads them, sorts
-          descending, and the contract verifies the order + pays winners. Enter the candidate
-          ids (comma-separated) and their payout addresses in the same order as registered.
+          Candidate weights are already final (running tallies). Enter just the candidate
+          ids — buildRanking reads each one's weight AND payout address from the chain,
+          sorts descending, and the contract re-verifies and pays. No addresses to type:
+          payouts come from what was registered on-chain, so they can't be mistyped here.
         </Note>
         <Field label="candidate ids (comma-separated)">
           <input className="input" id="fin-ids" placeholder="1,2,3" />
         </Field>
-        <Field label="payout addresses (comma-separated, matching order)">
-          <input className="input" id="fin-addrs" placeholder="ADDR1,ADDR2,ADDR3" />
-        </Field>
         <button className="btn btn-primary" disabled={!!busy} onClick={() => run('fin', async () => {
           const ids = document.getElementById('fin-ids').value.split(',').map(s => Number(s.trim())).filter(Boolean)
-          const addrs = document.getElementById('fin-addrs').value.split(',').map(s => s.trim()).filter(Boolean)
-          const payouts = {}; ids.forEach((id, i) => { payouts[id] = addrs[i] })
-          const { rankedIds, payoutAddrs } = await buildRanking(ids, payouts)
+          const { rankedIds, payoutAddrs } = await buildRanking(ids)
           return finalize({ signTransactions, address: activeAddress, rankedCandidateIds: rankedIds, payoutAddrs })
         })}>
           {busy === 'fin' ? 'Finalizing…' : 'Finalize + pay winners'}
         </button>
-        <Note>buildRanking reads each candidate's on-chain weight and sorts for you; the contract re-verifies.</Note>
+        <Note>Payout addresses are read from each candidate's on-chain box, so the accounts list always matches what the contract pays.</Note>
       </Card>
 
       {/* Close */}

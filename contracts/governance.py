@@ -45,6 +45,9 @@ from algopy.arc4 import abimethod, Address, Struct, UInt64 as ArcU64, UInt8, Dyn
 MAX_CANDIDATES = 20
 # Target number of funded projects (ties can widen the actual winner set).
 TARGET_WINNERS = 3
+# Headroom left above MBR at payout, so inner payments can't drop the account below
+# its minimum balance and the app keeps functioning. 0.1 ALGO.
+POOL_BUFFER = 100_000
 
 
 class VoterBox(Struct):
@@ -71,7 +74,6 @@ class Governance(ARC4Contract):
         self.vote_open = UInt64(0)              # round voting opens (day 1)
         self.vote_close = UInt64(0)             # round votes freeze (day 14)
         self.tally_round = UInt64(0)            # round tally may begin (day 28)
-        self.pool_micro = UInt64(0)             # snapshotted pool for this epoch
         self.candidate_count = UInt64(0)
         self.phase = UInt64(0)                  # 0 open/voting, 2 finalized
         self.bootstrapped = UInt64(0)
@@ -144,12 +146,11 @@ class Governance(ARC4Contract):
         self.candidate_count = UInt64(0)
         self.phase = UInt64(0)
 
-        bal = Global.current_application_address.balance
-        mbr = Global.current_application_address.min_balance
-        pool = UInt64(0)
-        if bal > mbr:
-            pool = bal - mbr
-        self.pool_micro = pool
+        # NOTE: the pool is NOT snapshotted here. Harvested staking rewards flow into
+        # this account throughout the epoch, so the amount to distribute is computed
+        # LIVE at finalize (balance - MBR - buffer). Snapshotting at open would
+        # exclude every reward that arrives during the voting period — unfair, and
+        # it would push a whole month's yield into the next epoch.
         return self.epoch_id
 
     @abimethod()
@@ -219,15 +220,24 @@ class Governance(ARC4Contract):
             self._sub_weight(v.voted_candidate.native, reduce)
             v.voted_weight = ArcU64(v.staked.native)
 
-        self.voters[Txn.sender] = v.copy()
+        remaining: UInt64 = v.staked.native
 
+        # Return the Sprout first.
         itxn.AssetTransfer(
             xfer_asset=self.sprout_asa_id,
             asset_receiver=Txn.sender,
             asset_amount=amount,
             fee=0,
         ).submit()
-        remaining: UInt64 = v.staked.native
+
+        # Box hygiene: if the voter is now fully unstaked, delete their box so its
+        # MBR is released (and the app can eventually close). Any decrement to their
+        # candidate already happened above. Otherwise persist the updated box.
+        if remaining == 0:
+            del self.voters[Txn.sender]
+        else:
+            self.voters[Txn.sender] = v.copy()
+
         return remaining
 
     # ── voting ────────────────────────────────────────────────────────────────
@@ -310,8 +320,19 @@ class Governance(ARC4Contract):
             i += 1
         assert winners > 0, "no votes cast"
 
-        # 3) Equal split among winners. Dust (pool mod winners) stays and carries over.
-        share = self.pool_micro // winners
+        # 3) Compute the pool LIVE, now, at tally — = balance - MBR - buffer. This
+        #    captures all staking rewards that flowed in during the epoch. A small
+        #    buffer stays above MBR so the account keeps functioning and the inner
+        #    payments can't drive it below min balance.
+        bal = Global.current_application_address.balance
+        mbr = Global.current_application_address.min_balance
+        floor = mbr + POOL_BUFFER
+        pool = UInt64(0)
+        if bal > floor:
+            pool = bal - floor
+
+        # Equal split among winners. Dust (pool mod winners) stays and carries over.
+        share = pool // winners
         if share > 0:
             i = UInt64(0)
             while i < n:
@@ -325,6 +346,15 @@ class Governance(ARC4Contract):
                         fee=0,
                     ).submit()
                 i += 1
+
+        # Box hygiene: the epoch is over, so delete every candidate box to release
+        # its MBR. ranked_candidate_ids lists all candidates (asserted == count), so
+        # this clears them all. The app can then close once voter boxes are gone too.
+        j = UInt64(0)
+        while j < n:
+            del self.candidates[ranked_candidate_ids[j].native]
+            j += 1
+        self.candidate_count = UInt64(0)
 
         self.phase = UInt64(2)
         return winners
@@ -361,10 +391,15 @@ class Governance(ARC4Contract):
         the Sprout ASA, so it opts out and closes cleanly — no manager needed.
 
         SAFETY GATE: the app must hold ZERO Sprout (all voters unstaked) so close can
-        never seize a voter's stake."""
+        never seize a voter's stake. It must also have NO boxes left — the account
+        cannot close while boxes hold MBR. Voter boxes delete on full unstake; all
+        candidate boxes delete at finalize. So before close: everyone unstakes
+        (clears Sprout AND voter boxes), and the epoch is finalized (clears candidate
+        boxes). candidate_count == 0 confirms candidates are cleared."""
         self._assert_admin()
         held = self._sprout().balance(Global.current_application_address)
         assert held == 0, "unstake all voter Sprout before closing"
+        assert self.candidate_count == 0, "finalize the epoch first (clears candidate boxes)"
 
         itxn.AssetTransfer(
             xfer_asset=self.sprout_asa_id,
@@ -388,7 +423,14 @@ class Governance(ARC4Contract):
 
     @abimethod(readonly=True)
     def get_pool(self) -> UInt64:
-        return self.pool_micro
+        # Live distributable pool = balance - MBR - buffer (what finalize would pay).
+        bal = Global.current_application_address.balance
+        mbr = Global.current_application_address.min_balance
+        floor = mbr + POOL_BUFFER
+        if bal <= floor:
+            return UInt64(0)
+        p: UInt64 = bal - floor
+        return p
 
     @abimethod(readonly=True)
     def get_staked(self, who: Address) -> UInt64:
