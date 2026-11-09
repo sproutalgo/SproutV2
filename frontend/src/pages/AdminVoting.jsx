@@ -15,7 +15,7 @@ import { useToast } from '../context/ToastContext'
 import { deployAndBootstrap, closeGovernance, discardUnbootstrapped } from '../utils/governanceDeploy'
 import {
   stake, unstake, vote, openEpoch, registerCandidate,
-  finalizeAuto, fetchStaked, fetchPool, IDS,
+  finalizeAuto, fetchStaked, fetchPool, listCandidateIds, IDS,
 } from '../utils/governanceChain'
 import { fetchDirectory } from '../utils/api'
 
@@ -63,10 +63,10 @@ export default function AdminVoting() {
   // candidate registration (directory-backed)
   const [dirEntries, setDirEntries] = useState([])     // approved directory entries
   const [selectedEntry, setSelectedEntry] = useState('') // chosen entry id (UUID)
-  const [candNum, setCandNum] = useState('')           // numeric candidate id (uint64) the admin assigns
-  // stake/vote (admin testing)
+  // stake/vote
   const [stakeAmt, setStakeAmt] = useState('')
-  const [voteCandId, setVoteCandId] = useState('')
+  const [voteCandId, setVoteCandId] = useState('')     // chosen candidate_number to vote for
+  const [registeredIds, setRegisteredIds] = useState([]) // on-chain candidate ids this epoch
   // status
   const [pool, setPool] = useState(null)
   const [myStake, setMyStake] = useState(null)
@@ -90,13 +90,26 @@ export default function AdminVoting() {
       .catch(() => setDirEntries([]))
   }, [])
 
-  // The payout address for a directory entry is its owning wallet (wallet_address),
-  // or an explicit payout_address column if present. This is the anti-exploit point:
-  // the payout comes from the directory record, not free admin input.
+  // Load the candidate ids registered on-chain for the current epoch (for the vote
+  // dropdown). Refreshed after registering/voting via refreshCandidates().
+  async function refreshCandidates() {
+    if (!IDS.GOV_APP_ID) return
+    try { setRegisteredIds(await listCandidateIds()) } catch { setRegisteredIds([]) }
+  }
+  useEffect(() => { refreshCandidates() /* eslint-disable-next-line */ }, [])
+
+  // A directory entry's stable numeric candidate id and payout address.
   const selectedEntryObj = dirEntries.find(e => String(e.id) === String(selectedEntry))
   const autoPayout = selectedEntryObj
     ? (selectedEntryObj.payout_address || selectedEntryObj.wallet_address || '')
     : ''
+  const autoCandNum = selectedEntryObj ? selectedEntryObj.candidate_number : null
+
+  // Map a candidate_number (on-chain id) back to its directory project name.
+  const nameForCandidate = (num) => {
+    const e = dirEntries.find(x => Number(x.candidate_number) === Number(num))
+    return e ? e.name : `Candidate #${num}`
+  }
 
   async function run(label, fn, ok = 'Done') {
     try { setBusy(label); await fn(); addToast(ok, 'success') }
@@ -174,25 +187,22 @@ export default function AdminVoting() {
           </select>
         </Field>
         {selectedEntryObj && (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Payout address (from the directory, not editable):<br />
-            <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{autoPayout || '— this entry has no payout/wallet address —'}</code>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            <div>Candidate id: <strong>{autoCandNum ?? '— run the candidate_number migration —'}</strong></div>
+            <div>Payout address: <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{autoPayout || '— no payout/wallet address —'}</code></div>
           </div>
         )}
-        <Field label="On-chain candidate id (number)">
-          <input className="input" inputMode="numeric" placeholder="e.g. 1" value={candNum} onChange={e => setCandNum(e.target.value)} />
-          <span className="field-hint">
-            The directory uses UUIDs; the contract needs a uint64. Assign a small number per project
-            for now. (Production: a dedicated numeric column on directory_entries.)
-          </span>
-        </Field>
-        <button className="btn" disabled={!!busy || !selectedEntryObj || !autoPayout || !/^\d+$/.test(candNum)}
-          onClick={() => run('cand', () =>
-            registerCandidate({ signTransactions, address: activeAddress,
-              directoryEntryId: Number(candNum), payoutAddr: autoPayout }))}>
+        <button
+          className="btn"
+          disabled={!!busy || !selectedEntryObj || !autoPayout || autoCandNum == null}
+          onClick={() => run('cand', async () => {
+            await registerCandidate({ signTransactions, address: activeAddress,
+              directoryEntryId: Number(autoCandNum), payoutAddr: autoPayout })
+            await refreshCandidates()
+          })}>
           {busy === 'cand' ? 'Registering…' : 'Register candidate'}
         </button>
-        <Note>Payout address comes from the selected directory project — the admin can't point it elsewhere.</Note>
+        <Note>Candidate id and payout address both come from the selected directory project — nothing typed, and the admin can't point the payout elsewhere.</Note>
       </Card>
 
       {/* Stake + allocate (admin self-test) */}
@@ -211,10 +221,18 @@ export default function AdminVoting() {
             {busy === 'unstake' ? 'Unstaking…' : 'Unstake'}
           </button>
         </Row>
-        <Field label="vote for candidate_id (backs full staked balance)">
-          <input className="input" value={voteCandId} onChange={e => setVoteCandId(e.target.value)} />
+        <Field label="Vote for project (backs full staked balance)">
+          <select className="input" value={voteCandId} onChange={e => setVoteCandId(e.target.value)}>
+            <option value="">— select a candidate —</option>
+            {registeredIds.map(id => (
+              <option key={id} value={id}>{nameForCandidate(id)}</option>
+            ))}
+          </select>
+          {registeredIds.length === 0 && (
+            <span className="field-hint">No candidates registered on-chain yet for this epoch.</span>
+          )}
         </Field>
-        <button className="btn" disabled={!!busy} onClick={() => run('vote', async () => {
+        <button className="btn" disabled={!!busy || !voteCandId} onClick={() => run('vote', async () => {
           const me = await fetchStaked(activeAddress)
           return vote({ signTransactions, address: activeAddress, candidateId: Number(voteCandId),
             prevCandidateId: me.hasVote ? me.votedCandidate : 0 })
