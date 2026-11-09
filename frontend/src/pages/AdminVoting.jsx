@@ -15,8 +15,9 @@ import { useToast } from '../context/ToastContext'
 import { deployAndBootstrap, closeGovernance, discardUnbootstrapped } from '../utils/governanceDeploy'
 import {
   stake, unstake, vote, openEpoch, registerCandidate,
-  finalize, fetchStaked, fetchPool, fetchCandidateWeight, buildRanking, IDS,
+  finalizeAuto, fetchStaked, fetchPool, IDS,
 } from '../utils/governanceChain'
+import { fetchDirectory } from '../utils/api'
 
 const APPROVAL_URL = '/contracts/gov_approval.teal'
 const CLEAR_URL    = '/contracts/gov_clear.teal'
@@ -59,9 +60,10 @@ export default function AdminVoting() {
   const [voteOpen, setVoteOpen] = useState('')
   const [voteClose, setVoteClose] = useState('')
   const [tallyRound, setTallyRound] = useState('')
-  // candidate
-  const [dirId, setDirId] = useState('')
-  const [payoutAddr, setPayoutAddr] = useState('')
+  // candidate registration (directory-backed)
+  const [dirEntries, setDirEntries] = useState([])     // approved directory entries
+  const [selectedEntry, setSelectedEntry] = useState('') // chosen entry id (UUID)
+  const [candNum, setCandNum] = useState('')           // numeric candidate id (uint64) the admin assigns
   // stake/vote (admin testing)
   const [stakeAmt, setStakeAmt] = useState('')
   const [voteCandId, setVoteCandId] = useState('')
@@ -77,6 +79,20 @@ export default function AdminVoting() {
     fetchPool().then(setPool).catch(() => {})
     if (activeAddress) fetchStaked(activeAddress).then(setMyStake).catch(() => {})
   }, [activeAddress])
+  // Load approved directory entries for the candidate dropdown.
+  useEffect(() => {
+    fetchDirectory({ pageSize: 100 })
+      .then(res => setDirEntries(res?.entries || []))
+      .catch(() => setDirEntries([]))
+  }, [])
+
+  // The payout address for a directory entry is its owning wallet (wallet_address),
+  // or an explicit payout_address column if present. This is the anti-exploit point:
+  // the payout comes from the directory record, not free admin input.
+  const selectedEntryObj = dirEntries.find(e => String(e.id) === String(selectedEntry))
+  const autoPayout = selectedEntryObj
+    ? (selectedEntryObj.payout_address || selectedEntryObj.wallet_address || '')
+    : ''
 
   async function run(label, fn, ok = 'Done') {
     try { setBusy(label); await fn(); addToast(ok, 'success') }
@@ -143,17 +159,36 @@ export default function AdminVoting() {
         <Note>Use current round + offsets for testing (e.g. open=now, close=now+small, tally=now+bigger).</Note>
       </Card>
 
-      {/* Register candidate — one ID: the directory entry id is the candidate id */}
+      {/* Register candidate — pick an approved directory project; payout auto-fills */}
       <Card title="3. Register candidate">
-        <Field label="directory_entry_id (also the candidate id)">
-          <input className="input" value={dirId} onChange={e => setDirId(e.target.value)} />
+        <Field label="Project (approved directory entries)">
+          <select className="input" value={selectedEntry} onChange={e => setSelectedEntry(e.target.value)}>
+            <option value="">— select a project —</option>
+            {dirEntries.map(e => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
         </Field>
-        <Field label="payout address"><input className="input" value={payoutAddr} onChange={e => setPayoutAddr(e.target.value.trim())} /></Field>
-        <button className="btn" disabled={!!busy} onClick={() => run('cand', () =>
-          registerCandidate({ signTransactions, address: activeAddress, directoryEntryId: Number(dirId), payoutAddr }))}>
+        {selectedEntryObj && (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Payout address (from the directory, not editable):<br />
+            <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{autoPayout || '— this entry has no payout/wallet address —'}</code>
+          </div>
+        )}
+        <Field label="On-chain candidate id (number)">
+          <input className="input" inputMode="numeric" placeholder="e.g. 1" value={candNum} onChange={e => setCandNum(e.target.value)} />
+          <span className="field-hint">
+            The directory uses UUIDs; the contract needs a uint64. Assign a small number per project
+            for now. (Production: a dedicated numeric column on directory_entries.)
+          </span>
+        </Field>
+        <button className="btn" disabled={!!busy || !selectedEntryObj || !autoPayout || !/^\d+$/.test(candNum)}
+          onClick={() => run('cand', () =>
+            registerCandidate({ signTransactions, address: activeAddress,
+              directoryEntryId: Number(candNum), payoutAddr: autoPayout }))}>
           {busy === 'cand' ? 'Registering…' : 'Register candidate'}
         </button>
-        <Note>In production this becomes a dropdown of approved+fundable directory entries; the id and payout address auto-fill.</Note>
+        <Note>Payout address comes from the selected directory project — the admin can't point it elsewhere.</Note>
       </Card>
 
       {/* Stake + allocate (admin self-test) */}
@@ -185,25 +220,18 @@ export default function AdminVoting() {
         <Note>One voter → one candidate, full staked weight. Re-vote to apply a new balance or switch candidate.</Note>
       </Card>
 
-      {/* Tally */}
+      {/* Tally — one click */}
       <Card title="5. Tally (after tally_round)">
         <Note>
-          Candidate weights are already final (running tallies). Enter just the candidate
-          ids — buildRanking reads each one's weight AND payout address from the chain,
-          sorts descending, and the contract re-verifies and pays. No addresses to type:
-          payouts come from what was registered on-chain, so they can't be mistyped here.
+          One click. The app's candidate boxes are discovered automatically, their weights
+          and payout addresses are read from the chain, sorted descending, and submitted —
+          the contract re-verifies the ranking and pays the top 3 (ties widen). Nothing to type.
         </Note>
-        <Field label="candidate ids (comma-separated)">
-          <input className="input" id="fin-ids" placeholder="1,2,3" />
-        </Field>
-        <button className="btn btn-primary" disabled={!!busy} onClick={() => run('fin', async () => {
-          const ids = document.getElementById('fin-ids').value.split(',').map(s => Number(s.trim())).filter(Boolean)
-          const { rankedIds, payoutAddrs } = await buildRanking(ids)
-          return finalize({ signTransactions, address: activeAddress, rankedCandidateIds: rankedIds, payoutAddrs })
-        })}>
+        <button className="btn btn-primary" disabled={!!busy} onClick={() => run('fin', () =>
+          finalizeAuto({ signTransactions, address: activeAddress }))}>
           {busy === 'fin' ? 'Finalizing…' : 'Finalize + pay winners'}
         </button>
-        <Note>Payout addresses are read from each candidate's on-chain box, so the accounts list always matches what the contract pays.</Note>
+        <Note>Candidates, weights, and payout addresses all come from on-chain state — no manual entry.</Note>
       </Card>
 
       {/* Close */}

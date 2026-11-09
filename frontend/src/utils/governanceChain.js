@@ -218,6 +218,35 @@ export async function fetchPool() {
   return Math.max(0, bal - mbr)
 }
 
+// Enumerate all candidate ids by listing the app's boxes and keeping the `c:` ones.
+// This is what lets finalize be one click — the contract can't list its own boxes,
+// but the client can, off-chain, via algod. Decodes the uint64 id from each box name.
+export async function listCandidateIds() {
+  const res = await algodClient.getApplicationBoxes(GOV_APP_ID).do()
+  const boxes = pick(res, 'boxes') || []
+  const prefix = new TextEncoder().encode('c:')
+  const ids = []
+  for (const b of boxes) {
+    // box name may be a Uint8Array or base64 string depending on sdk version.
+    let name = pick(b, 'name')
+    if (typeof name === 'string') name = Uint8Array.from(atob(name), c => c.charCodeAt(0))
+    if (name.length === prefix.length + 8 && prefix.every((c, i) => name[i] === c)) {
+      const dv = new DataView(name.buffer, name.byteOffset + prefix.length, 8)
+      ids.push(Number(dv.getBigUint64(0)))
+    }
+  }
+  return ids
+}
+
+// One-click finalize: discover all candidates, read their weights + payout addresses
+// from chain, sort descending, and submit. No ids typed, no addresses typed.
+export async function finalizeAuto({ signTransactions, address }) {
+  const ids = await listCandidateIds()
+  if (ids.length === 0) throw new Error('No candidates registered for this epoch')
+  const { rankedIds, payoutAddrs } = await buildRanking(ids)
+  return finalize({ signTransactions, address, rankedCandidateIds: rankedIds, payoutAddrs })
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function uint64Bytes(n) {
