@@ -22,6 +22,10 @@ import { fetchDirectory } from '../utils/api'
 const APPROVAL_URL = '/contracts/gov_approval.teal'
 const CLEAR_URL    = '/contracts/gov_clear.teal'
 const MICRO = 1_000_000
+// Rounds between epoch milestones. vote_open = base + STEP, vote_close = +2·STEP,
+// tally_round = +3·STEP. Equal intervals mirror the production cadence (the two-week
+// windows), just compressed to blocks for testing.
+const EPOCH_STEP = 100
 const toAlgo = (m) => (Number(m || 0) / MICRO).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 function b64ToBytes(b64) {
@@ -56,10 +60,9 @@ export default function AdminVoting() {
   // close
   const [closeAppId, setCloseAppId] = useState('')
   const [closeConfirm, setCloseConfirm] = useState('')
-  // epoch
-  const [voteOpen, setVoteOpen] = useState('')
-  const [voteClose, setVoteClose] = useState('')
-  const [tallyRound, setTallyRound] = useState('')
+  // epoch — admin enters a base "last block"; the three rounds derive from it at a
+  // fixed step so testing mirrors the production cadence (equal intervals).
+  const [lastBlock, setLastBlock] = useState('')
   // candidate registration (directory-backed)
   const [dirEntries, setDirEntries] = useState([])     // approved directory entries
   const [selectedEntry, setSelectedEntry] = useState('') // chosen entry id (UUID)
@@ -109,6 +112,23 @@ export default function AdminVoting() {
   const nameForCandidate = (num) => {
     const e = dirEntries.find(x => Number(x.candidate_number) === Number(num))
     return e ? e.name : `Candidate #${num}`
+  }
+
+  // Derive the three epoch rounds from the admin's base "last block".
+  const baseBlock = /^\d+$/.test(lastBlock) ? Number(lastBlock) : null
+  const epochRounds = baseBlock == null ? null : {
+    voteOpen:   baseBlock + EPOCH_STEP,
+    voteClose:  baseBlock + 2 * EPOCH_STEP,
+    tallyRound: baseBlock + 3 * EPOCH_STEP,
+  }
+
+  // Convenience: pull the current round from algod so the admin doesn't look it up.
+  async function fillCurrentRound() {
+    try {
+      const status = await algodClient.status().do()
+      const r = Number(status['last-round'] ?? status.lastRound)
+      if (Number.isFinite(r)) setLastBlock(String(r))
+    } catch (e) { addToast(S(e), 'error') }
   }
 
   async function run(label, fn, ok = 'Done') {
@@ -162,18 +182,33 @@ export default function AdminVoting() {
         {deployed && <Note><strong>App {deployed.appId}</strong> — set VITE_GOV_APP_ID={deployed.appId}, then rebuild.</Note>}
       </Card>
 
-      {/* Open epoch */}
+      {/* Open epoch — one base block; the three rounds derive at a fixed step */}
       <Card title="2. Open epoch (rounds)">
-        <Row>
-          <Field label="vote_open"><input className="input" value={voteOpen} onChange={e => setVoteOpen(e.target.value)} /></Field>
-          <Field label="vote_close (freeze)"><input className="input" value={voteClose} onChange={e => setVoteClose(e.target.value)} /></Field>
-          <Field label="tally_round"><input className="input" value={tallyRound} onChange={e => setTallyRound(e.target.value)} /></Field>
-        </Row>
-        <button className="btn" disabled={!!busy} onClick={() => run('epoch', () =>
-          openEpoch({ signTransactions, address: activeAddress, voteOpen: Number(voteOpen), voteClose: Number(voteClose), tallyRound: Number(tallyRound) }))}>
+        <Field label="Last block (base)">
+          <Row>
+            <input className="input" inputMode="numeric" placeholder="e.g. current round"
+              value={lastBlock} onChange={e => setLastBlock(e.target.value.trim())} style={{ flex: 1 }} />
+            <button className="btn btn-ghost" type="button" disabled={!!busy} onClick={fillCurrentRound}>
+              Use current round
+            </button>
+          </Row>
+          <span className="field-hint">
+            vote_open = base + {EPOCH_STEP}, vote_close = base + {2 * EPOCH_STEP}, tally_round = base + {3 * EPOCH_STEP}.
+            Equal intervals mirror the production two-week windows.
+          </span>
+        </Field>
+        {epochRounds && (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            <div>vote_open: <strong>{epochRounds.voteOpen}</strong></div>
+            <div>vote_close (freeze): <strong>{epochRounds.voteClose}</strong></div>
+            <div>tally_round: <strong>{epochRounds.tallyRound}</strong></div>
+          </div>
+        )}
+        <button className="btn" disabled={!!busy || !epochRounds} onClick={() => run('epoch', () =>
+          openEpoch({ signTransactions, address: activeAddress,
+            voteOpen: epochRounds.voteOpen, voteClose: epochRounds.voteClose, tallyRound: epochRounds.tallyRound }))}>
           {busy === 'epoch' ? 'Opening…' : 'Open epoch'}
         </button>
-        <Note>Use current round + offsets for testing (e.g. open=now, close=now+small, tally=now+bigger).</Note>
       </Card>
 
       {/* Register candidate — pick an approved directory project; payout auto-fills */}
