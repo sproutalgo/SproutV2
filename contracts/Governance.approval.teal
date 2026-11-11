@@ -3,85 +3,85 @@
 
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
-    intcblock 0 1 8 32 100000
-    bytecblock 0x763a "epoch_id" 0x151f7c75 0x633a "phase" "candidate_count" "sprout_asa_id" "bootstrapped" "admin" "vote_open" "vote_close" "tally_round" "escrow_app"
+    intcblock 0 1 8 32 1000000 100000
+    bytecblock "candidate_count" 0x763a "epoch_id" 0x151f7c75 0x633a "phase" "sprout_asa_id" "tally_round" "bootstrapped" "admin" "vote_open" "vote_close" "escrow_app"
     txn ApplicationID
     bnz main_after_if_else@2
-    // governance.py:70
+    // governance.py:101
     // self.admin = Account()
-    bytec 8 // "admin"
+    bytec 9 // "admin"
     global ZeroAddress
     app_global_put
-    // governance.py:71
+    // governance.py:102
     // self.sprout_asa_id = UInt64(0)
     bytec 6 // "sprout_asa_id"
     intc_0 // 0
     app_global_put
-    // governance.py:72
+    // governance.py:103
     // self.escrow_app = UInt64(0)             # App A, informational
     bytec 12 // "escrow_app"
     intc_0 // 0
     app_global_put
-    // governance.py:73
+    // governance.py:104
     // self.epoch_id = UInt64(0)
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     intc_0 // 0
     app_global_put
-    // governance.py:74
+    // governance.py:105
     // self.vote_open = UInt64(0)              # round voting opens (day 1)
-    bytec 9 // "vote_open"
+    bytec 10 // "vote_open"
     intc_0 // 0
     app_global_put
-    // governance.py:75
+    // governance.py:106
     // self.vote_close = UInt64(0)             # round votes freeze (day 14)
-    bytec 10 // "vote_close"
+    bytec 11 // "vote_close"
     intc_0 // 0
     app_global_put
-    // governance.py:76
+    // governance.py:107
     // self.tally_round = UInt64(0)            # round tally may begin (day 28)
-    bytec 11 // "tally_round"
+    bytec 7 // "tally_round"
     intc_0 // 0
     app_global_put
-    // governance.py:77
+    // governance.py:108
     // self.candidate_count = UInt64(0)
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     intc_0 // 0
     app_global_put
-    // governance.py:78
+    // governance.py:109
     // self.phase = UInt64(0)                  # 0 open/voting, 2 finalized
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     intc_0 // 0
     app_global_put
-    // governance.py:79
+    // governance.py:110
     // self.bootstrapped = UInt64(0)
-    bytec 7 // "bootstrapped"
+    bytec 8 // "bootstrapped"
     intc_0 // 0
     app_global_put
 
 main_after_if_else@2:
-    // governance.py:68
+    // governance.py:99
     // class Governance(ARC4Contract):
     txn NumAppArgs
-    bz main___algopy_default_create@23
+    bz main___algopy_default_create@24
     pushbytess 0x7883ad68 0x1cc8c403 // method "discard_unbootstrapped()void", method "admin_close()void"
     txna ApplicationArgs 0
     match main_discard_unbootstrapped_route@5 main_admin_close_route@6
 
 main_switch_case_next@7:
-    // governance.py:68
+    // governance.py:99
     // class Governance(ARC4Contract):
     txn OnCompletion
     !
     assert
     txn ApplicationID
     assert
-    pushbytess 0x4f1efc35 0x9319c651 0xaa72c3c9 0xda4af034 0xa1e51170 0x98287069 0x0c850fbe 0x51947edb 0x8ea96faf 0x9724e5a7 0x78dda2b0 // method "bootstrap(address,uint64,uint64)void", method "open_epoch(uint64,uint64,uint64)uint64", method "register_candidate(uint64,address)void", method "stake(axfer)uint64", method "unstake(uint64)uint64", method "vote(uint64)uint64", method "finalize(uint64[])uint64", method "get_epoch()uint64", method "get_pool()uint64", method "get_staked(address)uint64", method "get_candidate_weight(uint64)uint64"
+    pushbytess 0x4f1efc35 0x9319c651 0xaa72c3c9 0xd89c7374 0xda4af034 0xa1e51170 0x98287069 0x0c850fbe 0x51947edb 0x8ea96faf 0x9724e5a7 0x78dda2b0 // method "bootstrap(address,uint64,uint64)void", method "open_epoch(uint64,uint64,uint64)uint64", method "register_candidate(uint64,address)void", method "admin_delete_candidate(uint64)uint64", method "stake(axfer)uint64", method "unstake(uint64)uint64", method "vote(uint64)uint64", method "finalize(uint64[])uint64", method "get_epoch()uint64", method "get_pool()uint64", method "get_staked(address)uint64", method "get_candidate_weight(uint64)uint64"
     txna ApplicationArgs 0
-    match bootstrap open_epoch register_candidate stake unstake vote finalize get_epoch get_pool get_staked get_candidate_weight
+    match bootstrap open_epoch register_candidate admin_delete_candidate stake unstake vote finalize get_epoch get_pool get_staked get_candidate_weight
     err
 
 main_admin_close_route@6:
-    // governance.py:394
+    // governance.py:549
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -92,7 +92,7 @@ main_admin_close_route@6:
     b admin_close
 
 main_discard_unbootstrapped_route@5:
-    // governance.py:370
+    // governance.py:525
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -102,7 +102,7 @@ main_discard_unbootstrapped_route@5:
     assert
     b discard_unbootstrapped
 
-main___algopy_default_create@23:
+main___algopy_default_create@24:
     txn OnCompletion
     !
     txn ApplicationID
@@ -113,7 +113,7 @@ main___algopy_default_create@23:
 
 // governance.Governance.bootstrap[routing]() -> void:
 bootstrap:
-    // governance.py:113
+    // governance.py:152
     // @abimethod()
     txna ApplicationArgs 1
     dup
@@ -135,51 +135,51 @@ bootstrap:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // governance.py:115
+    // governance.py:154
     // assert Txn.sender == Global.creator_address, "deployer only"
     txn Sender
     global CreatorAddress
     ==
     assert // deployer only
-    // governance.py:116
+    // governance.py:155
     // assert self.bootstrapped == 0, "already bootstrapped"
     intc_0 // 0
-    bytec 7 // "bootstrapped"
+    bytec 8 // "bootstrapped"
     app_global_get_ex
     assert // check self.bootstrapped exists
     !
     assert // already bootstrapped
-    // governance.py:117
+    // governance.py:156
     // assert admin.native != Global.zero_address, "admin cannot be zero"
     dig 2
     global ZeroAddress
     !=
     assert // admin cannot be zero
-    // governance.py:118
+    // governance.py:157
     // assert sprout_asa_id != 0, "sprout asa required"
     dig 1
     assert // sprout asa required
-    // governance.py:120
+    // governance.py:159
     // self.admin = admin.native
-    bytec 8 // "admin"
+    bytec 9 // "admin"
     uncover 3
     app_global_put
-    // governance.py:121
+    // governance.py:160
     // self.sprout_asa_id = sprout_asa_id
     bytec 6 // "sprout_asa_id"
     dig 2
     app_global_put
-    // governance.py:122
+    // governance.py:161
     // self.escrow_app = escrow_app
     bytec 12 // "escrow_app"
     swap
     app_global_put
-    // governance.py:123
+    // governance.py:162
     // self.bootstrapped = UInt64(1)
-    bytec 7 // "bootstrapped"
+    bytec 8 // "bootstrapped"
     intc_1 // 1
     app_global_put
-    // governance.py:125-130
+    // governance.py:164-169
     // itxn.AssetTransfer(
     //     xfer_asset=sprout_asa_id,
     //     asset_receiver=Global.current_application_address,
@@ -187,24 +187,24 @@ bootstrap:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:127
+    // governance.py:166
     // asset_receiver=Global.current_application_address,
     global CurrentApplicationAddress
-    // governance.py:128
+    // governance.py:167
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // governance.py:125
+    // governance.py:164
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // governance.py:129
+    // governance.py:168
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:125-130
+    // governance.py:164-169
     // itxn.AssetTransfer(
     //     xfer_asset=sprout_asa_id,
     //     asset_receiver=Global.current_application_address,
@@ -212,7 +212,7 @@ bootstrap:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:113
+    // governance.py:152
     // @abimethod()
     intc_1 // 1
     return
@@ -220,7 +220,7 @@ bootstrap:
 
 // governance.Governance.open_epoch[routing]() -> void:
 open_epoch:
-    // governance.py:134
+    // governance.py:173
     // @abimethod()
     txna ApplicationArgs 1
     dup
@@ -243,50 +243,114 @@ open_epoch:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // governance.py:136
+    // governance.py:175
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:137
+    // governance.py:176
     // assert self.bootstrapped == 1, "not bootstrapped"
     intc_0 // 0
-    bytec 7 // "bootstrapped"
+    bytec 8 // "bootstrapped"
     app_global_get_ex
     assert // check self.bootstrapped exists
     intc_1 // 1
     ==
     assert // not bootstrapped
-    // governance.py:138
-    // assert self.phase == 0 or self.phase == 2, "previous epoch not finalized"
+    // governance.py:192
+    // self.epoch_id == 0
     intc_0 // 0
-    bytec 4 // "phase"
+    bytec_2 // "epoch_id"
     app_global_get_ex
-    assert // check self.phase exists
-    bz open_epoch_bool_true@3
+    assert // check self.epoch_id exists
+    // governance.py:192-194
+    // self.epoch_id == 0
+    // or self.phase == 2
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    bz open_epoch_bool_true@4
+    // governance.py:193
+    // or self.phase == 2
     intc_0 // 0
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     app_global_get_ex
     assert // check self.phase exists
     pushint 2
     ==
-    bz open_epoch_bool_false@4
+    // governance.py:192-194
+    // self.epoch_id == 0
+    // or self.phase == 2
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    bnz open_epoch_bool_true@4
+    // governance.py:194
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    global Round
+    intc_0 // 0
+    bytec 7 // "tally_round"
+    app_global_get_ex
+    assert // check self.tally_round exists
+    >=
+    // governance.py:192-194
+    // self.epoch_id == 0
+    // or self.phase == 2
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    bz open_epoch_bool_false@5
 
-open_epoch_bool_true@3:
+open_epoch_bool_true@4:
     intc_1 // 1
 
-open_epoch_bool_merge@5:
-    // governance.py:138
-    // assert self.phase == 0 or self.phase == 2, "previous epoch not finalized"
-    assert // previous epoch not finalized
-    // governance.py:139
-    // assert vote_open < vote_close, "vote_close must follow vote_open"
+open_epoch_bool_merge@6:
+    // governance.py:177-195
+    // # A new epoch may only open from one of three clean states:
+    // #   * the very first epoch (epoch_id == 0), or
+    // #   * a FINALIZED prior epoch (phase == 2), or
+    // #   * (A-1 recovery) a prior epoch abandoned long past tally
+    // #     (Global.round >= tally_round + RECOVERY_DELAY) whose candidate boxes
+    // #     have already been cleared via admin_delete_candidate — the deadlock cure
+    // #     for an epoch finalize could not process. The delay matches the recovery
+    // #     hatch so this branch can't open before the boxes are even clearable, and
+    // #     can't race an honest finalize. Without this third case, clearing a
+    // #     deadlocked epoch's boxes would leave phase == 0 and open_epoch would
+    // #     still refuse to advance, re-locking the pool.
+    // # Re-opening an already-LIVE epoch (phase 0 before tally_round) remains
+    // # forbidden — that is what once let candidate_count reset to 0 while old
+    // # candidate boxes physically lingered, orphaning them permanently.
+    // assert (
+    //     self.epoch_id == 0
+    //     or self.phase == 2
+    //     or Global.round >= self.tally_round + RECOVERY_DELAY
+    // ), "finish or end the current epoch first"
+    assert // finish or end the current epoch first
+    // governance.py:196-200
+    // # Belt and suspenders: candidates must already be cleared. finalize sets this to
+    // # 0 and deletes every candidate box together (and admin_delete_candidate can
+    // # drive it to 0 in the recovery case), so this is the on-chain proof that no
+    // # candidate box survives into the new epoch — in every one of the three paths.
+    // assert self.candidate_count == 0, "candidates not cleared (finalize first)"
+    intc_0 // 0
+    bytec_0 // "candidate_count"
+    app_global_get_ex
+    assert // check self.candidate_count exists
+    !
+    assert // candidates not cleared (finalize first)
+    // governance.py:201-205
+    // # M-3: vote_open must be in the FUTURE. register_candidate locks at
+    // # Global.round < vote_open, so a past (or current) vote_open would slam the
+    // # candidate-registration window shut the instant the epoch opens — no
+    // # candidate could ever be added, bricking the epoch into an empty ballot.
+    // assert vote_open > Global.round, "vote_open must be in the future"
+    global Round
+    uncover 3
+    dup
     uncover 2
+    >
+    assert // vote_open must be in the future
+    // governance.py:206
+    // assert vote_open < vote_close, "vote_close must follow vote_open"
     dup
     uncover 3
     dup
     cover 2
     <
     assert // vote_close must follow vote_open
-    // governance.py:140
+    // governance.py:207
     // assert vote_close < tally_round, "tally must follow vote_close"
     dup
     uncover 3
@@ -294,43 +358,43 @@ open_epoch_bool_merge@5:
     cover 3
     <
     assert // tally must follow vote_close
-    // governance.py:142
+    // governance.py:209
     // self.epoch_id += 1
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
     intc_1 // 1
     +
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     swap
     app_global_put
-    // governance.py:143
+    // governance.py:210
     // self.vote_open = vote_open
-    bytec 9 // "vote_open"
+    bytec 10 // "vote_open"
     uncover 3
     app_global_put
-    // governance.py:144
+    // governance.py:211
     // self.vote_close = vote_close
-    bytec 10 // "vote_close"
+    bytec 11 // "vote_close"
     swap
     app_global_put
-    // governance.py:145
+    // governance.py:212
     // self.tally_round = tally_round
-    bytec 11 // "tally_round"
+    bytec 7 // "tally_round"
     swap
     app_global_put
-    // governance.py:146
+    // governance.py:213
     // self.candidate_count = UInt64(0)
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     intc_0 // 0
     app_global_put
-    // governance.py:147
+    // governance.py:214
     // self.phase = UInt64(0)
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     intc_0 // 0
     app_global_put
-    // governance.py:149-154
+    // governance.py:216-221
     // # NOTE: the pool is NOT snapshotted here. Harvested staking rewards flow into
     // # this account throughout the epoch, so the amount to distribute is computed
     // # LIVE at finalize (balance - MBR - buffer). Snapshotting at open would
@@ -338,27 +402,27 @@ open_epoch_bool_merge@5:
     // # it would push a whole month's yield into the next epoch.
     // return self.epoch_id
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
-    // governance.py:134
+    // governance.py:173
     // @abimethod()
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
     intc_1 // 1
     return
 
-open_epoch_bool_false@4:
+open_epoch_bool_false@5:
     intc_0 // 0
-    b open_epoch_bool_merge@5
+    b open_epoch_bool_merge@6
 
 
 // governance.Governance.register_candidate[routing]() -> void:
 register_candidate:
-    // governance.py:156
+    // governance.py:223
     // @abimethod()
     txna ApplicationArgs 1
     dup
@@ -373,52 +437,52 @@ register_candidate:
     intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // governance.py:161
+    // governance.py:228
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:162
+    // governance.py:229
     // assert self.epoch_id > 0, "no epoch"
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
     assert // no epoch
-    // governance.py:163
+    // governance.py:230
     // assert self.phase == 0, "voting not open"
     intc_0 // 0
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     app_global_get_ex
     assert // check self.phase exists
     !
     assert // voting not open
-    // governance.py:164
+    // governance.py:231
     // assert Global.round < self.vote_open, "candidates lock at voting open"
     global Round
     intc_0 // 0
-    bytec 9 // "vote_open"
+    bytec 10 // "vote_open"
     app_global_get_ex
     assert // check self.vote_open exists
     <
     assert // candidates lock at voting open
-    // governance.py:165
+    // governance.py:232
     // assert self.candidate_count < MAX_CANDIDATES, "candidate limit reached"
     intc_0 // 0
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     app_global_get_ex
     assert // check self.candidate_count exists
     dup
-    pushint 20
+    intc_2 // 8
     <
     assert // candidate limit reached
-    // governance.py:166
+    // governance.py:233
     // assert directory_entry_id != 0, "directory entry id must be nonzero"
     dig 2
     assert // directory entry id must be nonzero
-    // governance.py:167
+    // governance.py:234
     // assert directory_entry_id not in self.candidates, "candidate exists"
     uncover 2
     itob
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
@@ -426,17 +490,17 @@ register_candidate:
     bury 1
     !
     assert // candidate exists
-    // governance.py:168
+    // governance.py:235
     // assert payout_addr.native != Global.zero_address, "payout addr required"
     dig 2
     global ZeroAddress
     !=
     assert // payout addr required
-    // governance.py:172
+    // governance.py:239
     // weight=ArcU64(0),
     intc_0 // 0
     itob
-    // governance.py:170-173
+    // governance.py:237-240
     // self.candidates[directory_entry_id] = CandidateBox(
     //     payout_addr=payout_addr,
     //     weight=ArcU64(0),
@@ -445,22 +509,135 @@ register_candidate:
     swap
     concat
     box_put
-    // governance.py:174
+    // governance.py:241
     // self.candidate_count += 1
     intc_1 // 1
     +
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     swap
     app_global_put
-    // governance.py:156
+    // governance.py:223
     // @abimethod()
     intc_1 // 1
     return
 
 
+// governance.Governance.admin_delete_candidate[routing]() -> void:
+admin_delete_candidate:
+    // governance.py:243
+    // @abimethod()
+    txna ApplicationArgs 1
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    // governance.py:271
+    // self._assert_admin()
+    callsub _assert_admin
+    // governance.py:280
+    // self.phase == 2
+    intc_0 // 0
+    bytec 5 // "phase"
+    app_global_get_ex
+    assert // check self.phase exists
+    pushint 2
+    ==
+    // governance.py:280-281
+    // self.phase == 2
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    bnz admin_delete_candidate_bool_true@3
+    // governance.py:281
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    global Round
+    intc_0 // 0
+    bytec 7 // "tally_round"
+    app_global_get_ex
+    assert // check self.tally_round exists
+    >=
+    // governance.py:280-281
+    // self.phase == 2
+    // or Global.round >= self.tally_round + RECOVERY_DELAY
+    bz admin_delete_candidate_bool_false@4
+
+admin_delete_candidate_bool_true@3:
+    intc_1 // 1
+
+admin_delete_candidate_bool_merge@5:
+    // governance.py:272-282
+    // # Normal cleanup: after a successful finalize (phase == 2).
+    // # M-B recovery: in phase 0, only once the epoch has been ABANDONED — i.e.
+    // # RECOVERY_DELAY rounds past tally_round with no finalize. The delay keeps the
+    // # hatch from racing an honest finalize (which is expected promptly at
+    // # tally_round), so the admin cannot use it to censor a legitimate winner in the
+    // # normal tally window — it opens only after any honest finalize would already
+    // # have run.
+    // assert (
+    //     self.phase == 2
+    //     or Global.round >= self.tally_round + RECOVERY_DELAY
+    // ), "cleanup after finalize, or recovery only long after tally"
+    assert // cleanup after finalize, or recovery only long after tally
+    // governance.py:283
+    // assert candidate_id in self.candidates, "no such candidate box"
+    itob
+    bytec 4 // 0x633a
+    swap
+    concat
+    dup
+    box_len
+    bury 1
+    assert // no such candidate box
+    // governance.py:285
+    // del self.candidates[candidate_id]
+    box_del
+    pop
+    // governance.py:286-288
+    // # Floor the counter at 0 — if it had drifted below the real box set, deleting a
+    // # box must not underflow it.
+    // if self.candidate_count > 0:
+    intc_0 // 0
+    bytec_0 // "candidate_count"
+    app_global_get_ex
+    assert // check self.candidate_count exists
+    bz admin_delete_candidate_after_if_else@7
+    // governance.py:289
+    // self.candidate_count -= 1
+    intc_0 // 0
+    bytec_0 // "candidate_count"
+    app_global_get_ex
+    assert // check self.candidate_count exists
+    intc_1 // 1
+    -
+    bytec_0 // "candidate_count"
+    swap
+    app_global_put
+
+admin_delete_candidate_after_if_else@7:
+    // governance.py:290
+    // return self.candidate_count
+    intc_0 // 0
+    bytec_0 // "candidate_count"
+    app_global_get_ex
+    assert // check self.candidate_count exists
+    // governance.py:243
+    // @abimethod()
+    itob
+    bytec_3 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+admin_delete_candidate_bool_false@4:
+    intc_0 // 0
+    b admin_delete_candidate_bool_merge@5
+
+
 // governance.Governance.stake[routing]() -> void:
 stake:
-    // governance.py:178
+    // governance.py:294
     // @abimethod()
     txn GroupIndex
     intc_1 // 1
@@ -470,7 +647,7 @@ stake:
     pushint 4 // axfer
     ==
     assert // transaction type is axfer
-    // governance.py:182
+    // governance.py:298
     // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
     bytec 6 // "sprout_asa_id"
@@ -478,74 +655,84 @@ stake:
     assert // check self.sprout_asa_id exists
     dup
     assert // not bootstrapped
-    // governance.py:183
+    // governance.py:299
     // assert axfer.xfer_asset == self._sprout(), "wrong asset"
     dig 1
     gtxns XferAsset
     ==
     assert // wrong asset
-    // governance.py:184
+    // governance.py:300
     // assert axfer.asset_receiver == Global.current_application_address, "stake into app"
     dup
     gtxns AssetReceiver
     global CurrentApplicationAddress
     ==
     assert // stake into app
-    // governance.py:185
+    // governance.py:301
     // assert axfer.sender == Txn.sender, "sender must be caller"
     dup
     gtxns Sender
     txn Sender
     ==
     assert // sender must be caller
-    // governance.py:186
+    // governance.py:302
     // amt = axfer.asset_amount
     gtxns AssetAmount
     dup
-    // governance.py:187
+    // governance.py:303
     // assert amt > 0, "zero stake"
     assert // zero stake
-    // governance.py:189
+    // governance.py:305
     // if Txn.sender in self.voters:
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_len
     bury 1
     bz stake_else_body@3
-    // governance.py:190
+    // governance.py:306
     // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_get
     assert // check self.voters entry exists
-    // governance.py:191
-    // v.staked = ArcU64(v.staked.native + amt)
+    // governance.py:307
+    // new_total: UInt64 = v.staked.native + amt
     dup
     intc_0 // 0
     extract_uint64
     uncover 2
     +
+    // governance.py:308-311
+    // # H-A: resulting balance must clear the floor. An existing box already
+    // # cleared it, so a top-up of any size keeps it clear — but assert anyway
+    // # so the invariant holds uniformly and survives future edits.
+    // assert new_total >= MIN_STAKE, "stake below minimum"
+    dup
+    intc 4 // 1000000
+    >=
+    assert // stake below minimum
+    // governance.py:312
+    // v.staked = ArcU64(new_total)
+    dup
     itob
+    uncover 2
+    swap
     replace2 0
-    // governance.py:192
+    // governance.py:313
     // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
-    dig 1
+    swap
     box_put
-    // governance.py:193
-    // total: UInt64 = v.staked.native
-    intc_0 // 0
-    extract_uint64
 
 stake_after_inlined_governance.Governance.stake@4:
-    // governance.py:178
+    // governance.py:294
     // @abimethod()
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -553,22 +740,30 @@ stake_after_inlined_governance.Governance.stake@4:
     return
 
 stake_else_body@3:
-    // governance.py:197
+    // governance.py:316-318
+    // # H-A: a NEW voter box's opening stake must meet the floor, so no dust box
+    // # can ever be created to grief the pool's MBR.
+    // assert amt >= MIN_STAKE, "stake below minimum (1 ALGO equivalent)"
+    dup
+    intc 4 // 1000000
+    >=
+    assert // stake below minimum (1 ALGO equivalent)
+    // governance.py:320
     // staked=ArcU64(amt),
     dup
     itob
-    // governance.py:198
+    // governance.py:321
     // voted_candidate=ArcU64(0),
     intc_0 // 0
     itob
-    // governance.py:201
+    // governance.py:324
     // epoch=ArcU64(self.epoch_id),
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
     itob
-    // governance.py:196-202
+    // governance.py:319-325
     // self.voters[Txn.sender] = VoterBox(
     //     staked=ArcU64(amt),
     //     voted_candidate=ArcU64(0),
@@ -581,10 +776,10 @@ stake_else_body@3:
     concat
     uncover 2
     concat
-    // governance.py:200
+    // governance.py:323
     // has_vote=UInt8(0),
     pushbytes 0x00
-    // governance.py:196-202
+    // governance.py:319-325
     // self.voters[Txn.sender] = VoterBox(
     //     staked=ArcU64(amt),
     //     voted_candidate=ArcU64(0),
@@ -595,12 +790,12 @@ stake_else_body@3:
     concat
     swap
     concat
-    // governance.py:196
+    // governance.py:319
     // self.voters[Txn.sender] = VoterBox(
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
-    // governance.py:196-202
+    // governance.py:319-325
     // self.voters[Txn.sender] = VoterBox(
     //     staked=ArcU64(amt),
     //     voted_candidate=ArcU64(0),
@@ -610,7 +805,7 @@ stake_else_body@3:
     // )
     swap
     box_put
-    // governance.py:178
+    // governance.py:294
     // @abimethod()
     b stake_after_inlined_governance.Governance.stake@4
 
@@ -620,7 +815,7 @@ unstake:
     intc_0 // 0
     pushbytes ""
     dup
-    // governance.py:205
+    // governance.py:328
     // @abimethod()
     txna ApplicationArgs 1
     dup
@@ -630,49 +825,90 @@ unstake:
     assert // invalid number of bytes for arc4.uint64
     btoi
     dup
-    // governance.py:210
+    // governance.py:333
     // assert Txn.sender in self.voters, "nothing staked"
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_len
     bury 1
     assert // nothing staked
-    // governance.py:211
+    // governance.py:334
     // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_get
+    swap
+    dup
+    cover 2
+    cover 3
     assert // check self.voters entry exists
-    // governance.py:212
+    // governance.py:335
     // assert amount > 0, "zero unstake"
     dig 1
     assert // zero unstake
-    // governance.py:213
+    // governance.py:336
     // assert v.staked.native >= amount, "exceeds staked"
-    dup
     intc_0 // 0
     extract_uint64
     dup
-    dig 3
+    dig 2
     >=
     assert // exceeds staked
-    // governance.py:215
-    // v.staked = ArcU64(v.staked.native - amount)
-    uncover 2
+    // governance.py:338
+    // new_staked: UInt64 = v.staked.native - amount
+    swap
     -
+    dup
+    // governance.py:339-344
+    // # H-A: the box must end at 0 (fully exited, box deleted below) or at/above the
+    // # floor — never a sub-threshold dust remainder, which would leave a cheap box
+    // # permanently inflating the pool's MBR. Full withdrawal is ALWAYS allowed (the
+    // # voter can pass the exact staked amount to exit); only a dusty leftover is
+    // # forbidden. To go below the floor, unstake everything.
+    // assert new_staked == 0 or new_staked >= MIN_STAKE, "unstake to zero or leave >= minimum"
+    bz unstake_bool_true@3
+    dup
+    intc 4 // 1000000
+    >=
+    bz unstake_bool_false@4
+
+unstake_bool_true@3:
+    intc_1 // 1
+
+unstake_bool_merge@5:
+    // governance.py:339-344
+    // # H-A: the box must end at 0 (fully exited, box deleted below) or at/above the
+    // # floor — never a sub-threshold dust remainder, which would leave a cheap box
+    // # permanently inflating the pool's MBR. Full withdrawal is ALWAYS allowed (the
+    // # voter can pass the exact staked amount to exit); only a dusty leftover is
+    // # forbidden. To go below the floor, unstake everything.
+    // assert new_staked == 0 or new_staked >= MIN_STAKE, "unstake to zero or leave >= minimum"
+    assert // unstake to zero or leave >= minimum
+    // governance.py:346
+    // v.staked = ArcU64(new_staked)
     itob
     replace2 0
-    dup
-    // governance.py:217-218
-    // # Decrement voted weight if the new staked balance is below it.
-    // if v.has_vote.native == 1 and v.voted_weight.native > v.staked.native:
+    dupn 2
+    // governance.py:348-353
+    // # Decrement voted weight if the new staked balance is below it — but ONLY for a
+    // # live vote in the current epoch. A vote left over from a finalized epoch points
+    // # at a deleted candidate box; decrementing it would revert (box_get on a missing
+    // # box) and strand the stake. For a stale vote, skip the decrement and clear it so
+    // # the voter starts the new epoch clean.
+    // if self._has_live_vote(v.has_vote.native, v.epoch.native):
     pushint 24
     getbyte
-    intc_1 // 1
-    ==
-    bz unstake_after_if_else@4
+    dup
+    uncover 2
+    pushint 25
+    extract_uint64
+    callsub _has_live_vote
+    bz unstake_else_body@9
+    pop
+    // governance.py:354
+    // if v.voted_weight.native > v.staked.native:
     dupn 2
     pushint 16
     extract_uint64
@@ -687,33 +923,33 @@ unstake:
     dup
     bury 5
     >
-    bz unstake_after_if_else@4
-    // governance.py:219
+    bz unstake_after_if_else@12
+    // governance.py:355
     // reduce = v.voted_weight.native - v.staked.native
     dig 3
     dig 3
     -
-    // governance.py:220
+    // governance.py:356
     // self._sub_weight(v.voted_candidate.native, reduce)
     dig 1
     intc_2 // 8
     extract_uint64
     swap
     callsub _sub_weight
-    // governance.py:221
+    // governance.py:357
     // v.voted_weight = ArcU64(v.staked.native)
     dig 4
     replace2 16
 
-unstake_after_if_else@4:
-    // governance.py:223
+unstake_after_if_else@12:
+    // governance.py:364
     // remaining: UInt64 = v.staked.native
     dupn 2
     extract 0 8
     swap
     intc_0 // 0
     extract_uint64
-    // governance.py:225-231
+    // governance.py:366-372
     // # Return the Sprout first.
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
@@ -722,29 +958,29 @@ unstake_after_if_else@4:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:227
+    // governance.py:368
     // xfer_asset=self.sprout_asa_id,
     intc_0 // 0
     bytec 6 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // governance.py:228
+    // governance.py:369
     // asset_receiver=Txn.sender,
     txn Sender
     uncover 5
     itxn_field AssetAmount
     itxn_field AssetReceiver
     itxn_field XferAsset
-    // governance.py:225-226
+    // governance.py:366-367
     // # Return the Sprout first.
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // governance.py:230
+    // governance.py:371
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:225-231
+    // governance.py:366-372
     // # Return the Sprout first.
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
@@ -753,45 +989,73 @@ unstake_after_if_else@4:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:233-236
+    // governance.py:374-377
     // # Box hygiene: if the voter is now fully unstaked, delete their box so its
     // # MBR is released (and the app can eventually close). Any decrement to their
     // # candidate already happened above. Otherwise persist the updated box.
     // if remaining == 0:
-    bnz unstake_else_body@7
+    bnz unstake_else_body@15
     bury 1
-    // governance.py:237
+    // governance.py:378
     // del self.voters[Txn.sender]
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_del
     pop
 
-unstake_after_if_else@8:
-    // governance.py:205
+unstake_after_if_else@16:
+    // governance.py:328
     // @abimethod()
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
     intc_1 // 1
     return
 
-unstake_else_body@7:
-    // governance.py:239
+unstake_else_body@15:
+    // governance.py:380
     // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     uncover 2
     box_put
-    b unstake_after_if_else@8
+    b unstake_after_if_else@16
+
+unstake_else_body@9:
+    // governance.py:358
+    // elif v.has_vote.native == 1:
+    intc_1 // 1
+    ==
+    bz unstake_after_if_else@12
+    // governance.py:359-360
+    // # Stale vote from a previous epoch: clear it without touching any candidate.
+    // v.has_vote = UInt8(0)
+    intc_0 // 0
+    itob
+    swap
+    pushbytes 0x00
+    replace2 24
+    // governance.py:361
+    // v.voted_weight = ArcU64(0)
+    dig 1
+    replace2 16
+    // governance.py:362
+    // v.voted_candidate = ArcU64(0)
+    swap
+    replace2 8
+    b unstake_after_if_else@12
+
+unstake_bool_false@4:
+    intc_0 // 0
+    b unstake_bool_merge@5
 
 
 // governance.Governance.vote[routing]() -> void:
 vote:
-    // governance.py:245
+    // governance.py:386
     // @abimethod()
     txna ApplicationArgs 1
     dupn 2
@@ -800,60 +1064,60 @@ vote:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // governance.py:251
+    // governance.py:392
     // assert self.epoch_id > 0, "no epoch"
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
     assert // no epoch
-    // governance.py:252
+    // governance.py:393
     // assert self.phase == 0, "voting closed"
     intc_0 // 0
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     app_global_get_ex
     assert // check self.phase exists
     !
     assert // voting closed
-    // governance.py:253
+    // governance.py:394
     // assert Global.round >= self.vote_open, "voting not open yet"
     global Round
     intc_0 // 0
-    bytec 9 // "vote_open"
+    bytec 10 // "vote_open"
     app_global_get_ex
     assert // check self.vote_open exists
     >=
     assert // voting not open yet
-    // governance.py:254
+    // governance.py:395
     // assert Global.round < self.vote_close, "voting window closed"      # the freeze
     global Round
     intc_0 // 0
-    bytec 10 // "vote_close"
+    bytec 11 // "vote_close"
     app_global_get_ex
     assert // check self.vote_close exists
     <
     assert // voting window closed
-    // governance.py:255
+    // governance.py:396
     // assert candidate_id in self.candidates, "unknown candidate"
     itob
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
     box_len
     bury 1
     assert // unknown candidate
-    // governance.py:256
+    // governance.py:397
     // assert Txn.sender in self.voters, "stake before voting"
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_len
     bury 1
     assert // stake before voting
-    // governance.py:258
+    // governance.py:399
     // v = self.voters[Txn.sender].copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     box_get
@@ -861,7 +1125,7 @@ vote:
     dup
     uncover 2
     assert // check self.voters entry exists
-    // governance.py:259
+    // governance.py:400
     // new_weight: UInt64 = v.staked.native
     dup
     extract 0 8
@@ -871,18 +1135,24 @@ vote:
     extract_uint64
     dup
     cover 2
-    // governance.py:260
+    // governance.py:401
     // assert new_weight > 0, "nothing staked"
     assert // nothing staked
-    // governance.py:262-263
-    // # Remove any existing contribution first (old candidate, old weight).
-    // if v.has_vote.native == 1:
+    // governance.py:403-407
+    // # Remove any existing contribution first (old candidate, old weight) — but only
+    // # if it's a live vote in THIS epoch. A vote carried over from a finalized epoch
+    // # points at a deleted candidate box; subtracting it would revert. Re-voting in a
+    // # new epoch simply overwrites the stale vote.
+    // if self._has_live_vote(v.has_vote.native, v.epoch.native):
+    dup
     pushint 24
     getbyte
-    intc_1 // 1
-    ==
+    swap
+    pushint 25
+    extract_uint64
+    callsub _has_live_vote
     bz vote_after_if_else@3
-    // governance.py:264
+    // governance.py:408
     // self._sub_weight(v.voted_candidate.native, v.voted_weight.native)
     dig 1
     dup
@@ -894,55 +1164,55 @@ vote:
     callsub _sub_weight
 
 vote_after_if_else@3:
-    // governance.py:96
+    // governance.py:127
     // c = self.candidates[cid].copy()
     uncover 2
     dup
     box_get
     assert // check self.candidates entry exists
-    // governance.py:97
+    // governance.py:128
     // c.weight = ArcU64(c.weight.native + delta)
     intc_3 // 32
     extract_uint64
     uncover 2
     +
     itob
-    // governance.py:97-98
+    // governance.py:128-129
     // c.weight = ArcU64(c.weight.native + delta)
     // self.candidates[cid] = c.copy()
     intc_3 // 32
     swap
     box_replace // on error: index out of bounds
-    // governance.py:269
+    // governance.py:413
     // v.voted_candidate = ArcU64(candidate_id)
     uncover 2
     replace2 8
-    // governance.py:270
+    // governance.py:414
     // v.voted_weight = ArcU64(new_weight)
     dig 1
     replace2 16
-    // governance.py:271
+    // governance.py:415
     // v.has_vote = UInt8(1)
     pushbytes 0x01
     replace2 24
-    // governance.py:272
+    // governance.py:416
     // v.epoch = ArcU64(self.epoch_id)
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
     itob
     replace2 25
-    // governance.py:273
+    // governance.py:417
     // self.voters[Txn.sender] = v.copy()
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     txn Sender
     concat
     swap
     box_put
-    // governance.py:245
+    // governance.py:386
     // @abimethod()
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -954,15 +1224,15 @@ vote_after_if_else@3:
 finalize:
     intc_0 // 0
     pushbytes ""
-    dupn 5
-    // governance.py:278
+    dupn 7
+    // governance.py:422
     // @abimethod()
     txna ApplicationArgs 1
     dupn 2
     intc_0 // 0
     extract_uint16 // on error: invalid array length header
     dup
-    cover 2
+    cover 3
     dup
     intc_2 // 8
     *
@@ -972,124 +1242,157 @@ finalize:
     len
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint64>
-    // governance.py:287
+    // governance.py:431
     // assert self.phase == 0, "already finalized"
     intc_0 // 0
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     app_global_get_ex
     assert // check self.phase exists
     !
     assert // already finalized
-    // governance.py:288
+    // governance.py:432
     // assert Global.round >= self.tally_round, "tally not open"
     global Round
     intc_0 // 0
-    bytec 11 // "tally_round"
+    bytec 7 // "tally_round"
     app_global_get_ex
     assert // check self.tally_round exists
     >=
     assert // tally not open
-    // governance.py:289
+    // governance.py:433
     // assert ranked_candidate_ids.length == self.candidate_count, "must list all candidates"
     intc_0 // 0
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     app_global_get_ex
     assert // check self.candidate_count exists
     dig 1
     ==
     assert // must list all candidates
-    // governance.py:292
-    // assert n > 0, "no candidates"
-    assert // no candidates
-    // governance.py:294-295
+    // governance.py:437-444
+    // # A-2: an epoch with NO candidates (none registered, or a quiet epoch) is a
+    // # VALID finalize, not a revert. The old `assert n > 0` wedged the contract:
+    // # with zero candidates, finalize reverted, but open_epoch needs phase == 2 to
+    // # start the next epoch — so the app could neither finalize nor advance, and
+    // # the pool sat locked. Here, n == 0 pays nobody, deletes nothing, carries the
+    // # pool forward, and flips to phase 2 so the next epoch can open. Mirrors the
+    // # zero-WINNERS carry-forward already handled below.
+    // if n == 0:
+    bnz finalize_after_if_else@3
+    popn 2
+    // governance.py:445
+    // self.candidate_count = UInt64(0)
+    bytec_0 // "candidate_count"
+    intc_0 // 0
+    app_global_put
+    // governance.py:446
+    // self.phase = UInt64(2)
+    bytec 5 // "phase"
+    pushint 2
+    app_global_put
+    // governance.py:447
+    // return UInt64(0)
+    intc_0 // 0
+
+finalize_after_inlined_governance.Governance.finalize@33:
+    // governance.py:422
+    // @abimethod()
+    itob
+    bytec_3 // 0x151f7c75
+    swap
+    concat
+    log
+    intc_1 // 1
+    return
+
+finalize_after_if_else@3:
+    // governance.py:449-450
     // # 1) Verify the submitted ordering is descending by weight.
     // prev_w = UInt64(0)
     intc_0 // 0
-    cover 2
-    // governance.py:296
+    bury 5
+    // governance.py:451
     // i = UInt64(0)
     intc_0 // 0
-    cover 2
+    bury 7
 
-finalize_while_top@2:
-    // governance.py:297
+finalize_while_top@4:
+    // governance.py:452
     // while i < n:
+    dig 6
     dig 2
-    dig 1
     <
-    bz finalize_after_while@6
-    // governance.py:298
+    bz finalize_after_while@8
+    // governance.py:453
     // cid = ranked_candidate_ids[i].native
-    dig 1
+    dup
     extract 2 0
-    dig 3
+    dig 7
     dup
     cover 2
     intc_2 // 8
     *
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    // governance.py:299
+    // governance.py:454
     // assert cid in self.candidates, "unknown candidate in ranking"
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
     box_len
     bury 1
     assert // unknown candidate in ranking
-    // governance.py:300
+    // governance.py:455
     // w = self.candidates[cid].weight.native
     box_get
     pop
     intc_3 // 32
     extract_uint64
-    bury 6
-    // governance.py:301
+    bury 4
+    // governance.py:456
     // if i > 0:
-    bz finalize_after_if_else@5
-    // governance.py:302
+    bz finalize_after_if_else@7
+    // governance.py:457
     // assert w <= prev_w, "ranking not descending"
-    dig 4
-    dig 4
+    dig 2
+    dig 5
     <=
     assert // ranking not descending
 
-finalize_after_if_else@5:
-    // governance.py:304
+finalize_after_if_else@7:
+    // governance.py:459
     // i += 1
-    dig 2
+    dig 6
     intc_1 // 1
     +
-    bury 3
-    dig 4
-    bury 4
-    b finalize_while_top@2
+    bury 7
+    dig 2
+    bury 5
+    b finalize_while_top@4
 
-finalize_after_while@6:
-    // governance.py:306-308
+finalize_after_while@8:
+    // governance.py:461-463
     // # 2) Cutoff = weight at the TARGET_WINNERS-th place (or last if fewer). Winners
     // #    = all candidates with weight >= cutoff AND > 0 (tie-widening falls out).
     // cut_index = UInt64(TARGET_WINNERS - 1)
     pushint 2
     bury 9
-    // governance.py:309
+    // governance.py:464
     // if n < TARGET_WINNERS:
-    dup
+    dig 1
     pushint 3
     <
-    bz finalize_after_if_else@8
-    // governance.py:310
+    bz finalize_after_if_else@10
+    // governance.py:465
     // cut_index = n - 1
-    dup
+    dig 1
     intc_1 // 1
     -
     bury 9
 
-finalize_after_if_else@8:
-    // governance.py:311
+finalize_after_if_else@10:
+    // governance.py:466
     // cut_cid: UInt64 = ranked_candidate_ids[cut_index].native
-    swap
     extract 2 0
     dup
     cover 2
@@ -1098,9 +1401,9 @@ finalize_after_if_else@8:
     *
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    // governance.py:312
+    // governance.py:467
     // cutoff: UInt64 = self.candidates[cut_cid].weight.native
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     box_get
@@ -1108,31 +1411,31 @@ finalize_after_if_else@8:
     intc_3 // 32
     extract_uint64
     cover 2
-    // governance.py:314
+    // governance.py:469
     // winners = UInt64(0)
     intc_0 // 0
-    // governance.py:315
+    // governance.py:470
     // i = UInt64(0)
     dup
-    bury 5
+    bury 9
 
-finalize_while_top@9:
-    // governance.py:316
+finalize_while_top@11:
+    // governance.py:471
     // while i < n:
-    dig 4
+    dig 8
     dig 2
     <
-    bz finalize_after_while@14
-    // governance.py:317
+    bz finalize_after_while@16
+    // governance.py:472
     // w = self.candidates[ranked_candidate_ids[i].native].weight.native
-    dig 4
+    dig 8
     intc_2 // 8
     *
     dig 3
     swap
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     box_get
@@ -1140,30 +1443,30 @@ finalize_while_top@9:
     intc_3 // 32
     extract_uint64
     dup
-    bury 8
-    // governance.py:318
+    bury 6
+    // governance.py:473
     // if w >= cutoff and w > 0:
     dig 4
     >=
-    bz finalize_after_if_else@13
-    dig 6
-    bz finalize_after_if_else@13
-    // governance.py:319
+    bz finalize_after_if_else@15
+    dig 4
+    bz finalize_after_if_else@15
+    // governance.py:474
     // winners += 1
     intc_1 // 1
     +
 
-finalize_after_if_else@13:
-    // governance.py:320
+finalize_after_if_else@15:
+    // governance.py:475
     // i += 1
-    dig 4
+    dig 8
     intc_1 // 1
     +
-    bury 5
-    b finalize_while_top@9
+    bury 9
+    b finalize_while_top@11
 
-finalize_after_while@14:
-    // governance.py:327-331
+finalize_after_while@16:
+    // governance.py:482-486
     // # 3) Compute the pool LIVE, now, at tally — = balance - MBR - buffer. This
     // #    captures all staking rewards that flowed in during the epoch. A small
     // #    buffer stays above MBR so the account keeps functioning and the inner
@@ -1176,73 +1479,73 @@ finalize_after_while@14:
     cover 2
     bury 14
     assert // account funded
-    // governance.py:332
+    // governance.py:487
     // mbr = Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // governance.py:333
+    // governance.py:488
     // floor = mbr + POOL_BUFFER
-    intc 4 // 100000
+    intc 5 // 100000
     +
     dup
     bury 12
-    // governance.py:334
+    // governance.py:489
     // pool = UInt64(0)
     intc_0 // 0
-    bury 11
-    // governance.py:335
+    bury 10
+    // governance.py:490
     // if bal > floor:
     >
-    bz finalize_after_if_else@16
-    // governance.py:336
+    bz finalize_after_if_else@18
+    // governance.py:491
     // pool = bal - floor
     dig 11
     dig 10
     -
-    bury 9
+    bury 8
 
-finalize_after_if_else@16:
-    // governance.py:338-340
+finalize_after_if_else@18:
+    // governance.py:493-495
     // # Equal split among winners. Dust (pool mod winners) stays and carries over.
     // # Guard the division: winners can be 0, in which case there is no payout.
     // if winners > 0:
     dup
-    bz finalize_after_if_else@27
-    // governance.py:341
+    bz finalize_after_if_else@29
+    // governance.py:496
     // share = pool // winners
-    dig 8
+    dig 7
     dig 1
     /
     dup
-    bury 9
-    // governance.py:342
+    bury 7
+    // governance.py:497
     // if share > 0:
-    bz finalize_after_if_else@27
-    // governance.py:343
+    bz finalize_after_if_else@29
+    // governance.py:498
     // i = UInt64(0)
     intc_0 // 0
-    bury 5
+    bury 9
 
-finalize_while_top@19:
-    // governance.py:344
+finalize_while_top@21:
+    // governance.py:499
     // while i < n:
-    dig 4
+    dig 8
     dig 2
     <
-    bz finalize_after_if_else@27
-    // governance.py:345
+    bz finalize_after_if_else@29
+    // governance.py:500
     // cid = ranked_candidate_ids[i].native
-    dig 4
+    dig 8
     intc_2 // 8
     *
     dig 3
     swap
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    // governance.py:346
+    // governance.py:501
     // w = self.candidates[cid].weight.native
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
@@ -1252,41 +1555,41 @@ finalize_while_top@19:
     intc_3 // 32
     extract_uint64
     dup
-    bury 8
-    // governance.py:347
+    bury 6
+    // governance.py:502
     // if w >= cutoff and w > 0:
     dig 4
     >=
-    bz finalize_after_if_else@24
-    dig 6
-    bz finalize_after_if_else@24
-    // governance.py:348
+    bz finalize_after_if_else@26
+    dig 4
+    bz finalize_after_if_else@26
+    // governance.py:503
     // c = self.candidates[cid].copy()
     dig 12
     box_get
     assert // check self.candidates entry exists
-    // governance.py:349-353
+    // governance.py:504-508
     // itxn.Payment(
     //     receiver=c.payout_addr.native,
     //     amount=share,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:350
+    // governance.py:505
     // receiver=c.payout_addr.native,
     extract 0 32
-    dig 8
+    dig 6
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:349
+    // governance.py:504
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:352
+    // governance.py:507
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:349-353
+    // governance.py:504-508
     // itxn.Payment(
     //     receiver=c.payout_addr.native,
     //     amount=share,
@@ -1294,33 +1597,33 @@ finalize_while_top@19:
     // ).submit()
     itxn_submit
 
-finalize_after_if_else@24:
-    // governance.py:354
+finalize_after_if_else@26:
+    // governance.py:509
     // i += 1
-    dig 4
+    dig 8
     intc_1 // 1
     +
-    bury 5
-    b finalize_while_top@19
+    bury 9
+    b finalize_while_top@21
 
-finalize_after_if_else@27:
+finalize_after_if_else@29:
     uncover 3
     pop
-    // governance.py:356-359
+    // governance.py:511-514
     // # Box hygiene: the epoch is over, so delete every candidate box to release
     // # its MBR. ranked_candidate_ids lists all candidates (asserted == count), so
     // # this clears them all. The app can then close once voter boxes are gone too.
     // j = UInt64(0)
     intc_0 // 0
 
-finalize_while_top@28:
-    // governance.py:360
+finalize_while_top@30:
+    // governance.py:515
     // while j < n:
     dup
     dig 3
     <
-    bz finalize_after_while@30
-    // governance.py:361
+    bz finalize_after_while@32
+    // governance.py:516
     // del self.candidates[ranked_candidate_ids[j].native]
     dup
     intc_2 // 8
@@ -1329,57 +1632,53 @@ finalize_while_top@28:
     swap
     intc_2 // 8
     extract3 // on error: index access is out of bounds
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     box_del
     pop
-    // governance.py:362
+    // governance.py:517
     // j += 1
     intc_1 // 1
     +
-    b finalize_while_top@28
+    b finalize_while_top@30
 
-finalize_after_while@30:
+finalize_after_while@32:
     pop
-    // governance.py:363
+    bury 1
+    bury 1
+    // governance.py:518
     // self.candidate_count = UInt64(0)
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     intc_0 // 0
     app_global_put
-    // governance.py:365
+    // governance.py:520
     // self.phase = UInt64(2)
-    bytec 4 // "phase"
+    bytec 5 // "phase"
     pushint 2
     app_global_put
-    // governance.py:278
+    // governance.py:422
     // @abimethod()
-    itob
-    bytec_2 // 0x151f7c75
-    swap
-    concat
-    log
-    intc_1 // 1
-    return
+    b finalize_after_inlined_governance.Governance.finalize@33
 
 
 // governance.Governance.discard_unbootstrapped[routing]() -> void:
 discard_unbootstrapped:
-    // governance.py:382
+    // governance.py:537
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // governance.py:383
+    // governance.py:538
     // assert self.bootstrapped == 0, "already bootstrapped: use admin_close"
     intc_0 // 0
-    bytec 7 // "bootstrapped"
+    bytec 8 // "bootstrapped"
     app_global_get_ex
     assert // check self.bootstrapped exists
     !
     assert // already bootstrapped: use admin_close
-    // governance.py:385-390
+    // governance.py:540-545
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1387,27 +1686,27 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:386
+    // governance.py:541
     // receiver=Global.creator_address,
     global CreatorAddress
-    // governance.py:388
+    // governance.py:543
     // close_remainder_to=Global.creator_address,
     dup
     itxn_field CloseRemainderTo
-    // governance.py:387
+    // governance.py:542
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:385
+    // governance.py:540
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:389
+    // governance.py:544
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:385-390
+    // governance.py:540-545
     // itxn.Payment(
     //     receiver=Global.creator_address,
     //     amount=0,
@@ -1415,7 +1714,7 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:370
+    // governance.py:525
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -1423,37 +1722,37 @@ discard_unbootstrapped:
 
 // governance.Governance.admin_close[routing]() -> void:
 admin_close:
-    // governance.py:405
+    // governance.py:564
     // self._assert_admin()
     callsub _assert_admin
-    // governance.py:406
+    // governance.py:565
     // held = self._sprout().balance(Global.current_application_address)
     global CurrentApplicationAddress
-    // governance.py:92
+    // governance.py:123
     // return Asset(self.sprout_asa_id)
     intc_0 // 0
     bytec 6 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // governance.py:406
+    // governance.py:565
     // held = self._sprout().balance(Global.current_application_address)
     swap
     dig 1
     asset_holding_get AssetBalance
     assert // account opted into asset
-    // governance.py:407
+    // governance.py:566
     // assert held == 0, "unstake all voter Sprout before closing"
     !
     assert // unstake all voter Sprout before closing
-    // governance.py:408
-    // assert self.candidate_count == 0, "finalize the epoch first (clears candidate boxes)"
+    // governance.py:567
+    // assert self.candidate_count == 0, "clear candidates first (finalize or admin_delete_candidate)"
     intc_0 // 0
-    bytec 5 // "candidate_count"
+    bytec_0 // "candidate_count"
     app_global_get_ex
     assert // check self.candidate_count exists
     !
-    assert // finalize the epoch first (clears candidate boxes)
-    // governance.py:410-416
+    assert // clear candidates first (finalize or admin_delete_candidate)
+    // governance.py:569-575
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
     //     asset_receiver=self.admin,
@@ -1462,15 +1761,15 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // governance.py:412
+    // governance.py:571
     // asset_receiver=self.admin,
     intc_0 // 0
-    bytec 8 // "admin"
+    bytec 9 // "admin"
     app_global_get_ex
     assert // check self.admin exists
     dup
     itxn_field AssetCloseTo
-    // governance.py:413
+    // governance.py:572
     // asset_amount=0,
     intc_0 // 0
     itxn_field AssetAmount
@@ -1478,15 +1777,15 @@ admin_close:
     itxn_field AssetReceiver
     swap
     itxn_field XferAsset
-    // governance.py:410
+    // governance.py:569
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // governance.py:415
+    // governance.py:574
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:410-416
+    // governance.py:569-575
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
     //     asset_receiver=self.admin,
@@ -1495,7 +1794,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:417-422
+    // governance.py:576-581
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1505,20 +1804,20 @@ admin_close:
     itxn_begin
     dup
     itxn_field CloseRemainderTo
-    // governance.py:419
+    // governance.py:578
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // governance.py:417
+    // governance.py:576
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // governance.py:421
+    // governance.py:580
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // governance.py:417-422
+    // governance.py:576-581
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=0,
@@ -1526,7 +1825,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // governance.py:394
+    // governance.py:549
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -1534,16 +1833,16 @@ admin_close:
 
 // governance.Governance.get_epoch[routing]() -> void:
 get_epoch:
-    // governance.py:428
+    // governance.py:587
     // return self.epoch_id
     intc_0 // 0
-    bytec_1 // "epoch_id"
+    bytec_2 // "epoch_id"
     app_global_get_ex
     assert // check self.epoch_id exists
-    // governance.py:426
+    // governance.py:585
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -1553,7 +1852,7 @@ get_epoch:
 
 // governance.Governance.get_pool[routing]() -> void:
 get_pool:
-    // governance.py:432-433
+    // governance.py:591-592
     // # Live distributable pool = balance - MBR - buffer (what finalize would pay).
     // bal = Global.current_application_address.balance
     global CurrentApplicationAddress
@@ -1562,31 +1861,31 @@ get_pool:
     dup
     uncover 2
     assert // account funded
-    // governance.py:434
+    // governance.py:593
     // mbr = Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // governance.py:435
+    // governance.py:594
     // floor = mbr + POOL_BUFFER
-    intc 4 // 100000
+    intc 5 // 100000
     +
     dup
     cover 2
-    // governance.py:436
+    // governance.py:595
     // if bal <= floor:
     <=
     bz get_pool_after_if_else@3
     popn 2
-    // governance.py:437
+    // governance.py:596
     // return UInt64(0)
     intc_0 // 0
 
 get_pool_after_inlined_governance.Governance.get_pool@4:
-    // governance.py:430
+    // governance.py:589
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -1594,17 +1893,17 @@ get_pool_after_inlined_governance.Governance.get_pool@4:
     return
 
 get_pool_after_if_else@3:
-    // governance.py:438
+    // governance.py:597
     // p: UInt64 = bal - floor
     -
-    // governance.py:430
+    // governance.py:589
     // @abimethod(readonly=True)
     b get_pool_after_inlined_governance.Governance.get_pool@4
 
 
 // governance.Governance.get_staked[routing]() -> void:
 get_staked:
-    // governance.py:441
+    // governance.py:600
     // @abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -1612,16 +1911,16 @@ get_staked:
     intc_3 // 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // governance.py:443
+    // governance.py:602
     // if who.native in self.voters:
-    bytec_0 // 0x763a
+    bytec_1 // 0x763a
     swap
     concat
     dup
     box_len
     bury 1
     bz get_staked_after_if_else@3
-    // governance.py:444
+    // governance.py:603
     // s: UInt64 = self.voters[who.native].staked.native
     box_get
     assert // check self.voters entry exists
@@ -1629,10 +1928,10 @@ get_staked:
     extract_uint64
 
 get_staked_after_inlined_governance.Governance.get_staked@4:
-    // governance.py:441
+    // governance.py:600
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -1641,17 +1940,17 @@ get_staked_after_inlined_governance.Governance.get_staked@4:
 
 get_staked_after_if_else@3:
     pop
-    // governance.py:446
+    // governance.py:605
     // return UInt64(0)
     intc_0 // 0
-    // governance.py:441
+    // governance.py:600
     // @abimethod(readonly=True)
     b get_staked_after_inlined_governance.Governance.get_staked@4
 
 
 // governance.Governance.get_candidate_weight[routing]() -> void:
 get_candidate_weight:
-    // governance.py:448
+    // governance.py:607
     // @abimethod(readonly=True)
     txna ApplicationArgs 1
     dup
@@ -1660,17 +1959,17 @@ get_candidate_weight:
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // governance.py:450
+    // governance.py:609
     // if candidate_id in self.candidates:
     itob
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
     box_len
     bury 1
     bz get_candidate_weight_after_if_else@3
-    // governance.py:451
+    // governance.py:610
     // w: UInt64 = self.candidates[candidate_id].weight.native
     box_get
     assert // check self.candidates entry exists
@@ -1678,10 +1977,10 @@ get_candidate_weight:
     extract_uint64
 
 get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4:
-    // governance.py:448
+    // governance.py:607
     // @abimethod(readonly=True)
     itob
-    bytec_2 // 0x151f7c75
+    bytec_3 // 0x151f7c75
     swap
     concat
     log
@@ -1690,21 +1989,21 @@ get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4:
 
 get_candidate_weight_after_if_else@3:
     pop
-    // governance.py:453
+    // governance.py:612
     // return UInt64(0)
     intc_0 // 0
-    // governance.py:448
+    // governance.py:607
     // @abimethod(readonly=True)
     b get_candidate_weight_after_inlined_governance.Governance.get_candidate_weight@4
 
 
 // governance.Governance._assert_admin() -> void:
 _assert_admin:
-    // governance.py:88
+    // governance.py:119
     // assert Txn.sender == self.admin, "admin only"
     txn Sender
     intc_0 // 0
-    bytec 8 // "admin"
+    bytec 9 // "admin"
     app_global_get_ex
     assert // check self.admin exists
     ==
@@ -1712,39 +2011,76 @@ _assert_admin:
     retsub
 
 
+// governance.Governance._has_live_vote(has_vote: uint64, epoch: uint64) -> uint64:
+_has_live_vote:
+    // governance.py:131-132
+    // @subroutine
+    // def _has_live_vote(self, has_vote: UInt64, epoch: UInt64) -> bool:
+    proto 2 1
+    // governance.py:133-137
+    // # A vote only counts in the epoch it was cast. After finalize, candidate boxes
+    // # are deleted and the pool resets, so a vote carried over from a previous epoch
+    // # is stale: its candidate box no longer exists and its weight was already
+    // # consumed. Treat it as no vote — never try to decrement a deleted candidate.
+    // return has_vote == 1 and epoch == self.epoch_id
+    frame_dig -2
+    intc_1 // 1
+    ==
+    bz _has_live_vote_bool_false@3
+    intc_0 // 0
+    bytec_2 // "epoch_id"
+    app_global_get_ex
+    assert // check self.epoch_id exists
+    frame_dig -1
+    ==
+    bz _has_live_vote_bool_false@3
+    intc_1 // 1
+    retsub
+
+_has_live_vote_bool_false@3:
+    intc_0 // 0
+    // governance.py:133-137
+    // # A vote only counts in the epoch it was cast. After finalize, candidate boxes
+    // # are deleted and the pool resets, so a vote carried over from a previous epoch
+    // # is stale: its candidate box no longer exists and its weight was already
+    // # consumed. Treat it as no vote — never try to decrement a deleted candidate.
+    // return has_vote == 1 and epoch == self.epoch_id
+    retsub
+
+
 // governance.Governance._sub_weight(cid: uint64, delta: uint64) -> void:
 _sub_weight:
-    // governance.py:100-101
+    // governance.py:139-140
     // @subroutine
     // def _sub_weight(self, cid: UInt64, delta: UInt64) -> None:
     proto 2 0
-    // governance.py:102
+    // governance.py:141
     // c = self.candidates[cid].copy()
     frame_dig -2
     itob
-    bytec_3 // 0x633a
+    bytec 4 // 0x633a
     swap
     concat
     dup
     box_get
     assert // check self.candidates entry exists
-    // governance.py:103-104
+    // governance.py:142-143
     // # Clamp defensively; by invariant delta <= c.weight always.
     // w: UInt64 = c.weight.native
     intc_3 // 32
     extract_uint64
     dup
     cover 2
-    // governance.py:105
+    // governance.py:144
     // new_w = UInt64(0)
     intc_0 // 0
     cover 2
-    // governance.py:106
+    // governance.py:145
     // if w >= delta:
     frame_dig -1
     >=
     bz _sub_weight_after_if_else@2
-    // governance.py:107
+    // governance.py:146
     // new_w = w - delta
     frame_dig 0
     frame_dig -1
@@ -1752,11 +2088,11 @@ _sub_weight:
     frame_bury 1
 
 _sub_weight_after_if_else@2:
-    // governance.py:108
+    // governance.py:147
     // c.weight = ArcU64(new_w)
     frame_dig 1
     itob
-    // governance.py:108-109
+    // governance.py:147-148
     // c.weight = ArcU64(new_w)
     // self.candidates[cid] = c.copy()
     intc_3 // 32

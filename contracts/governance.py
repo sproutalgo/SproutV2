@@ -41,13 +41,44 @@ from algopy import (
 )
 from algopy.arc4 import abimethod, Address, Struct, UInt64 as ArcU64, UInt8, DynamicArray
 
-# Max candidates per epoch (fixed ballot). Tally reads this many boxes — keep modest.
-MAX_CANDIDATES = 20
+# Max candidates per epoch (fixed ballot). finalize reads/deletes this many boxes
+# in a single call, so it is bounded by the AVM's 8-box-reference-per-transaction
+# limit (and the per-call opcode budget). 8 keeps finalize feasible in one pooled
+# group and makes a partial-finalize box-orphan impossible. An off-chain nomination
+# phase narrows the field to these 8 finalists before they reach this contract.
+MAX_CANDIDATES = 8
 # Target number of funded projects (ties can widen the actual winner set).
 TARGET_WINNERS = 3
 # Headroom left above MBR at payout, so inner payments can't drop the account below
 # its minimum balance and the app keeps functioning. 0.1 ALGO.
 POOL_BUFFER = 100_000
+
+# H-A: minimum staked balance to hold a voter box. Each voter box the app stores
+# costs ALGO MBR that is paid from the POOL, not by the voter (voting is free).
+# Without a floor, anyone could open thousands of dust boxes (1 base unit each) that
+# permanently ratchet up the app's MBR — locking pool ALGO that only the griefer can
+# release. Requiring a real 1-ALGO-equivalent stake per box makes that attack cost
+# the griefer meaningful LOCKED Sprout instead of dust, while costing legitimate
+# voters nothing (they stake far more than this to have any voting weight). 1 Sprout
+# base unit == 1 microAlgo (6-decimal 1:1), so 1 ALGO's worth = 1_000_000 base units.
+# The floor applies to a box's RESULTING staked balance: a box must hold either 0
+# (deleted) or >= MIN_STAKE — never a sub-threshold dust remainder.
+MIN_STAKE = 1_000_000
+
+# M-B: how long after tally_round the phase-0 recovery branch of
+# admin_delete_candidate stays CLOSED. A normal finalize is expected promptly at
+# tally_round; the recovery hatch must not race it, or the admin could delete a
+# legitimate winner in the normal tally window. Opening the hatch only this many
+# rounds AFTER tally_round means an honest finalize always has an uncontested first
+# claim on the pool, and admin box-deletion in phase 0 is possible only once the
+# epoch has been abandoned long enough that no honest finalize came.
+#
+# ⚠️ TESTING VALUE: set to 0 so recovery is reachable immediately at tally_round
+# during LocalNet/testnet runs. BEFORE MAINNET, raise this to a real delay
+# (~1 week at ~2.8s/round ≈ 216_000 rounds). At 0, the admin CAN delete a candidate
+# the moment tally opens — the winner-censorship window M-B closes is reopened — so
+# this value is safe only for testing.
+RECOVERY_DELAY = 0
 
 
 class VoterBox(Struct):
@@ -98,6 +129,14 @@ class Governance(ARC4Contract):
         self.candidates[cid] = c.copy()
 
     @subroutine
+    def _has_live_vote(self, has_vote: UInt64, epoch: UInt64) -> bool:
+        # A vote only counts in the epoch it was cast. After finalize, candidate boxes
+        # are deleted and the pool resets, so a vote carried over from a previous epoch
+        # is stale: its candidate box no longer exists and its weight was already
+        # consumed. Treat it as no vote — never try to decrement a deleted candidate.
+        return has_vote == 1 and epoch == self.epoch_id
+
+    @subroutine
     def _sub_weight(self, cid: UInt64, delta: UInt64) -> None:
         c = self.candidates[cid].copy()
         # Clamp defensively; by invariant delta <= c.weight always.
@@ -135,7 +174,35 @@ class Governance(ARC4Contract):
     def open_epoch(self, vote_open: UInt64, vote_close: UInt64, tally_round: UInt64) -> UInt64:
         self._assert_admin()
         assert self.bootstrapped == 1, "not bootstrapped"
-        assert self.phase == 0 or self.phase == 2, "previous epoch not finalized"
+        # A new epoch may only open from one of three clean states:
+        #   * the very first epoch (epoch_id == 0), or
+        #   * a FINALIZED prior epoch (phase == 2), or
+        #   * (A-1 recovery) a prior epoch abandoned long past tally
+        #     (Global.round >= tally_round + RECOVERY_DELAY) whose candidate boxes
+        #     have already been cleared via admin_delete_candidate — the deadlock cure
+        #     for an epoch finalize could not process. The delay matches the recovery
+        #     hatch so this branch can't open before the boxes are even clearable, and
+        #     can't race an honest finalize. Without this third case, clearing a
+        #     deadlocked epoch's boxes would leave phase == 0 and open_epoch would
+        #     still refuse to advance, re-locking the pool.
+        # Re-opening an already-LIVE epoch (phase 0 before tally_round) remains
+        # forbidden — that is what once let candidate_count reset to 0 while old
+        # candidate boxes physically lingered, orphaning them permanently.
+        assert (
+            self.epoch_id == 0
+            or self.phase == 2
+            or Global.round >= self.tally_round + RECOVERY_DELAY
+        ), "finish or end the current epoch first"
+        # Belt and suspenders: candidates must already be cleared. finalize sets this to
+        # 0 and deletes every candidate box together (and admin_delete_candidate can
+        # drive it to 0 in the recovery case), so this is the on-chain proof that no
+        # candidate box survives into the new epoch — in every one of the three paths.
+        assert self.candidate_count == 0, "candidates not cleared (finalize first)"
+        # M-3: vote_open must be in the FUTURE. register_candidate locks at
+        # Global.round < vote_open, so a past (or current) vote_open would slam the
+        # candidate-registration window shut the instant the epoch opens — no
+        # candidate could ever be added, bricking the epoch into an empty ballot.
+        assert vote_open > Global.round, "vote_open must be in the future"
         assert vote_open < vote_close, "vote_close must follow vote_open"
         assert vote_close < tally_round, "tally must follow vote_close"
 
@@ -173,6 +240,55 @@ class Governance(ARC4Contract):
         )
         self.candidate_count += 1
 
+    @abimethod()
+    def admin_delete_candidate(self, candidate_id: UInt64) -> UInt64:
+        """ESCAPE HATCH (admin only): delete one candidate box by id, unconditionally.
+
+        This is the guaranteed cure for any candidate_count / box-set desync, so the
+        app can ALWAYS be driven to zero boxes and therefore ALWAYS deleted/closed —
+        no ALGO is ever trappable behind an orphaned candidate box.
+
+        ALLOWED ONLY ONCE THE EPOCH IS OVER: either finalize has run (phase == 2), OR
+        the tally round has arrived (Global.round >= tally_round) even if finalize has
+        not yet succeeded. The second case (A-1) is the deadlock cure: if finalize ever
+        can't run — e.g. a candidate_count/box-set desync makes the length check
+        unsatisfiable — the app would otherwise be stuck in phase 0 with boxes that
+        finalize can't delete and this hatch (phase-2-only) couldn't either, locking
+        the pool forever. Permitting direct deletion from tally_round onward means the
+        boxes are ALWAYS clearable, so finalize is never the sole path out.
+
+        It stays inert during the LIVE epoch (before tally_round), granting the admin
+        NO mid-voting power: it cannot censor a not-yet-voted candidate, grief a project
+        by front-running its first vote, or alter the ballot the public saw at
+        registration. Since voting freezes at vote_close < tally_round, deletion only
+        ever becomes possible after all voting has ended — the anti-censorship guarantee
+        is fully preserved. A mistakenly-registered candidate simply sits at weight 0
+        through voting, is ignored by finalize, and is cleaned up afterward.
+
+        Returns the new candidate_count. The count floors at 0 even if it had drifted,
+        so it can never underflow. Pair with a repeated off-chain enumeration of the
+        app's boxes to clear every lingering candidate before admin_close."""
+        self._assert_admin()
+        # Normal cleanup: after a successful finalize (phase == 2).
+        # M-B recovery: in phase 0, only once the epoch has been ABANDONED — i.e.
+        # RECOVERY_DELAY rounds past tally_round with no finalize. The delay keeps the
+        # hatch from racing an honest finalize (which is expected promptly at
+        # tally_round), so the admin cannot use it to censor a legitimate winner in the
+        # normal tally window — it opens only after any honest finalize would already
+        # have run.
+        assert (
+            self.phase == 2
+            or Global.round >= self.tally_round + RECOVERY_DELAY
+        ), "cleanup after finalize, or recovery only long after tally"
+        assert candidate_id in self.candidates, "no such candidate box"
+
+        del self.candidates[candidate_id]
+        # Floor the counter at 0 — if it had drifted below the real box set, deleting a
+        # box must not underflow it.
+        if self.candidate_count > 0:
+            self.candidate_count -= 1
+        return self.candidate_count
+
     # ── staking ─────────────────────────────────────────────────────────────────
 
     @abimethod()
@@ -188,11 +304,18 @@ class Governance(ARC4Contract):
 
         if Txn.sender in self.voters:
             v = self.voters[Txn.sender].copy()
-            v.staked = ArcU64(v.staked.native + amt)
+            new_total: UInt64 = v.staked.native + amt
+            # H-A: resulting balance must clear the floor. An existing box already
+            # cleared it, so a top-up of any size keeps it clear — but assert anyway
+            # so the invariant holds uniformly and survives future edits.
+            assert new_total >= MIN_STAKE, "stake below minimum"
+            v.staked = ArcU64(new_total)
             self.voters[Txn.sender] = v.copy()
-            total: UInt64 = v.staked.native
-            return total
+            return new_total
         else:
+            # H-A: a NEW voter box's opening stake must meet the floor, so no dust box
+            # can ever be created to grief the pool's MBR.
+            assert amt >= MIN_STAKE, "stake below minimum (1 ALGO equivalent)"
             self.voters[Txn.sender] = VoterBox(
                 staked=ArcU64(amt),
                 voted_candidate=ArcU64(0),
@@ -212,13 +335,31 @@ class Governance(ARC4Contract):
         assert amount > 0, "zero unstake"
         assert v.staked.native >= amount, "exceeds staked"
 
-        v.staked = ArcU64(v.staked.native - amount)
+        new_staked: UInt64 = v.staked.native - amount
+        # H-A: the box must end at 0 (fully exited, box deleted below) or at/above the
+        # floor — never a sub-threshold dust remainder, which would leave a cheap box
+        # permanently inflating the pool's MBR. Full withdrawal is ALWAYS allowed (the
+        # voter can pass the exact staked amount to exit); only a dusty leftover is
+        # forbidden. To go below the floor, unstake everything.
+        assert new_staked == 0 or new_staked >= MIN_STAKE, "unstake to zero or leave >= minimum"
 
-        # Decrement voted weight if the new staked balance is below it.
-        if v.has_vote.native == 1 and v.voted_weight.native > v.staked.native:
-            reduce = v.voted_weight.native - v.staked.native
-            self._sub_weight(v.voted_candidate.native, reduce)
-            v.voted_weight = ArcU64(v.staked.native)
+        v.staked = ArcU64(new_staked)
+
+        # Decrement voted weight if the new staked balance is below it — but ONLY for a
+        # live vote in the current epoch. A vote left over from a finalized epoch points
+        # at a deleted candidate box; decrementing it would revert (box_get on a missing
+        # box) and strand the stake. For a stale vote, skip the decrement and clear it so
+        # the voter starts the new epoch clean.
+        if self._has_live_vote(v.has_vote.native, v.epoch.native):
+            if v.voted_weight.native > v.staked.native:
+                reduce = v.voted_weight.native - v.staked.native
+                self._sub_weight(v.voted_candidate.native, reduce)
+                v.voted_weight = ArcU64(v.staked.native)
+        elif v.has_vote.native == 1:
+            # Stale vote from a previous epoch: clear it without touching any candidate.
+            v.has_vote = UInt8(0)
+            v.voted_weight = ArcU64(0)
+            v.voted_candidate = ArcU64(0)
 
         remaining: UInt64 = v.staked.native
 
@@ -259,8 +400,11 @@ class Governance(ARC4Contract):
         new_weight: UInt64 = v.staked.native
         assert new_weight > 0, "nothing staked"
 
-        # Remove any existing contribution first (old candidate, old weight).
-        if v.has_vote.native == 1:
+        # Remove any existing contribution first (old candidate, old weight) — but only
+        # if it's a live vote in THIS epoch. A vote carried over from a finalized epoch
+        # points at a deleted candidate box; subtracting it would revert. Re-voting in a
+        # new epoch simply overwrites the stale vote.
+        if self._has_live_vote(v.has_vote.native, v.epoch.native):
             self._sub_weight(v.voted_candidate.native, v.voted_weight.native)
 
         # Apply the full current stake to the chosen candidate.
@@ -289,7 +433,18 @@ class Governance(ARC4Contract):
         assert ranked_candidate_ids.length == self.candidate_count, "must list all candidates"
 
         n = ranked_candidate_ids.length
-        assert n > 0, "no candidates"
+
+        # A-2: an epoch with NO candidates (none registered, or a quiet epoch) is a
+        # VALID finalize, not a revert. The old `assert n > 0` wedged the contract:
+        # with zero candidates, finalize reverted, but open_epoch needs phase == 2 to
+        # start the next epoch — so the app could neither finalize nor advance, and
+        # the pool sat locked. Here, n == 0 pays nobody, deletes nothing, carries the
+        # pool forward, and flips to phase 2 so the next epoch can open. Mirrors the
+        # zero-WINNERS carry-forward already handled below.
+        if n == 0:
+            self.candidate_count = UInt64(0)
+            self.phase = UInt64(2)
+            return UInt64(0)
 
         # 1) Verify the submitted ordering is descending by weight.
         prev_w = UInt64(0)
@@ -397,15 +552,19 @@ class Governance(ARC4Contract):
         the Sprout ASA, so it opts out and closes cleanly — no manager needed.
 
         SAFETY GATE: the app must hold ZERO Sprout (all voters unstaked) so close can
-        never seize a voter's stake. It must also have NO boxes left — the account
-        cannot close while boxes hold MBR. Voter boxes delete on full unstake; all
-        candidate boxes delete at finalize. So before close: everyone unstakes
-        (clears Sprout AND voter boxes), and the epoch is finalized (clears candidate
-        boxes). candidate_count == 0 confirms candidates are cleared."""
+        never seize a voter's stake. The protocol also refuses to delete an app while
+        ANY box still exists, and deleting with boxes present would permanently strand
+        their MBR — so every candidate and voter box must be gone first. Voter boxes
+        delete on full unstake; candidate boxes delete at finalize, or individually via
+        admin_delete_candidate (the escape hatch). candidate_count == 0 confirms the
+        candidate set is cleared; if the counter ever disagrees with the real boxes,
+        admin_delete_candidate can always drive both to zero, so the app — and its
+        ALGO — can never be trapped. Operationally: unstake everyone, finalize (or
+        delete each candidate), confirm the app shows zero boxes off-chain, then close."""
         self._assert_admin()
         held = self._sprout().balance(Global.current_application_address)
         assert held == 0, "unstake all voter Sprout before closing"
-        assert self.candidate_count == 0, "finalize the epoch first (clears candidate boxes)"
+        assert self.candidate_count == 0, "clear candidates first (finalize or admin_delete_candidate)"
 
         itxn.AssetTransfer(
             xfer_asset=self.sprout_asa_id,
