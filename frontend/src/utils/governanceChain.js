@@ -144,18 +144,44 @@ export async function registerCandidate({ signTransactions, address, directoryEn
 
 // PHASE 1. Submit the full ranking (candidate ids sorted by weight DESC). The contract
 // verifies the ordering, freezes the winner set + share, deletes all candidate boxes.
+//
+// OPCODE BUDGET: tally loops over every candidate twice (verify ranking, then record
+// winners + delete boxes), which for a full 8-candidate ballot exceeds the 700-opcode
+// budget of a SINGLE app call. Algorand pools the opcode budget across all app calls in
+// an atomic GROUP (700 units each), so we pad the group with cheap read-only budget
+// filler calls. The contract is unchanged — only the real tally call does work; the
+// fillers just donate their 700 units to the shared pool. One filler per ~3 candidates
+// is ample; we scale with the ballot size and always include at least 3.
 export async function tally({ signTransactions, address, rankedCandidateIds }) {
   const m = method('tally')
   const ids = rankedCandidateIds.map(c => BigInt(c))
   const boxes = rankedCandidateIds.map(cid => ({ appIndex: GOV_APP_ID, name: boxName('c:', uint64Bytes(cid)) }))
-  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+  const tallyCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address,
     suggestedParams: await getSp(1000),   // no inner payments in tally
     appIndex: GOV_APP_ID,
     appArgs: buildAppArgs(m, [ids]),
     boxes,                                  // only candidate boxes — no accounts
   })
-  return signSend(signTransactions, [appCall], appCall.txID())
+
+  // Budget fillers: cheap read-only calls to the same app. Each adds 700 opcode units
+  // to the group's shared pool. get_epoch is trivial and side-effect free.
+  const fillers = Math.max(3, Math.ceil(rankedCandidateIds.length / 2))
+  const mEpoch = method('get_epoch')
+  const group = [tallyCall]
+  for (let i = 0; i < fillers; i++) {
+    group.push(algosdk.makeApplicationNoOpTxnFromObject({
+      sender: address,
+      // a distinct note keeps each filler's txid unique within the group
+      note: new Uint8Array([0x62, 0x67, 0x74, i]),  // "bgt" + index
+      suggestedParams: await getSp(1000),
+      appIndex: GOV_APP_ID,
+      appArgs: buildAppArgs(mEpoch, []),
+    }))
+  }
+  algosdk.assignGroupID(group)
+  // Confirm on the tally call's id (first in the group).
+  return signSend(signTransactions, group, tallyCall.txID())
 }
 
 // PHASE 2. Pay the next `count` winners their frozen share. References only the winner
