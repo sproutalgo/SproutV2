@@ -133,21 +133,69 @@ export async function registerCandidate({ signTransactions, address, directoryEn
   return signSend(signTransactions, [appCall], appCall.txID())
 }
 
-// Tally: submit the full ranking (candidate ids sorted by weight DESC); contract
-// verifies the ordering against its running tallies, derives winners, and pays. No
-// per-voter processing — candidate weights are already final (running tallies).
-export async function finalize({ signTransactions, address, rankedCandidateIds, payoutAddrs }) {
-  const m = method('finalize')
+// ── two-phase finalize: tally -> pay_winners -> finish_tally ──────────────────
+// The single finalize referenced every candidate box AND every winner account in one
+// txn, exceeding Algorand's 8-reference/txn limit at 8 candidates. The contract now
+// splits the work so each call references only ONE category:
+//   tally        — references only the candidate boxes (reads + deletes); winner
+//                  payout addresses are frozen into global state.
+//   pay_winners  — references only the winner payout accounts (<= 8 per slice).
+//   finish_tally — references nothing; flips to phase 2.
+
+// PHASE 1. Submit the full ranking (candidate ids sorted by weight DESC). The contract
+// verifies the ordering, freezes the winner set + share, deletes all candidate boxes.
+export async function tally({ signTransactions, address, rankedCandidateIds }) {
+  const m = method('tally')
   const ids = rankedCandidateIds.map(c => BigInt(c))
   const boxes = rankedCandidateIds.map(cid => ({ appIndex: GOV_APP_ID, name: boxName('c:', uint64Bytes(cid)) }))
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address,
-    // fee must cover up to (winners) inner payments; be generous for testing.
-    suggestedParams: await getSp(1000 * (rankedCandidateIds.length + 2)),
+    suggestedParams: await getSp(1000),   // no inner payments in tally
     appIndex: GOV_APP_ID,
     appArgs: buildAppArgs(m, [ids]),
-    boxes,
-    accounts: payoutAddrs || [],  // winner payout addresses (inner payment receivers)
+    boxes,                                  // only candidate boxes — no accounts
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
+// PHASE 2. Pay the next `count` winners their frozen share. References only the winner
+// payout accounts. `count` must be <= 8 (reference limit) and <= winners remaining.
+// Pass the payout addresses for THIS slice so they go in the accounts array (inner
+// payment receivers). The contract reads the authoritative addresses from global state;
+// the accounts array only needs to CONTAIN each receiver for the inner payment to send.
+export async function payWinners({ signTransactions, address, count, slicePayoutAddrs }) {
+  const m = method('pay_winners')
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address,
+    // fee covers up to `count` inner payments, plus the outer.
+    suggestedParams: await getSp(1000 * (Number(count) + 1)),
+    appIndex: GOV_APP_ID,
+    appArgs: buildAppArgs(m, [BigInt(count)]),
+    accounts: slicePayoutAddrs || [],      // only payout receivers — no boxes
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
+// PHASE 3. After all winners paid, flip to phase 2 so the next epoch can open.
+export async function finishTally({ signTransactions, address }) {
+  const m = method('finish_tally')
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address, suggestedParams: await getSp(1000),
+    appIndex: GOV_APP_ID, appArgs: buildAppArgs(m, []),
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
+// Admin escape hatch: delete one candidate box by id. Allowed once the epoch is over
+// (phase 2, or past tally_round+RECOVERY_DELAY). Used to clear orphaned candidate boxes
+// so the app can always reach zero boxes and be closed. References only that one box.
+export async function adminDeleteCandidate({ signTransactions, address, candidateId }) {
+  const m = method('admin_delete_candidate')
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address, suggestedParams: await getSp(1000),
+    appIndex: GOV_APP_ID,
+    appArgs: buildAppArgs(m, [BigInt(candidateId)]),
+    boxes: [{ appIndex: GOV_APP_ID, name: boxName('c:', uint64Bytes(candidateId)) }],
   })
   return signSend(signTransactions, [appCall], appCall.txID())
 }
@@ -238,13 +286,126 @@ export async function listCandidateIds() {
   return ids
 }
 
-// One-click finalize: discover all candidates, read their weights + payout addresses
-// from chain, sort descending, and submit. No ids typed, no addresses typed.
-export async function finalizeAuto({ signTransactions, address }) {
+// Read the governance global state we need to drive finalize: phase, winner_count,
+// paid_count. Falls back gracefully if a key is absent (older app / pre-tally).
+export async function fetchGovState() {
+  try {
+    const info = await algodClient.getApplicationByID(GOV_APP_ID).do()
+    const params = pick(info, 'params') || {}
+    const gs = pick(params, 'global-state', 'globalState') || []
+    const out = {}
+    for (const kv of gs) {
+      const keyB64 = pick(kv, 'key')
+      const key = typeof keyB64 === 'string'
+        ? new TextDecoder().decode(Uint8Array.from(atob(keyB64), c => c.charCodeAt(0)))
+        : new TextDecoder().decode(keyB64)
+      const val = pick(kv, 'value') || {}
+      out[key] = Number(pick(val, 'uint') || 0)
+    }
+    return {
+      phase: out.phase ?? 0,
+      winnerCount: out.winner_count ?? 0,
+      paidCount: out.paid_count ?? 0,
+      candidateCount: out.candidate_count ?? 0,
+      epochId: out.epoch_id ?? 0,
+    }
+  } catch (e) {
+    return { phase: 0, winnerCount: 0, paidCount: 0, candidateCount: 0, epochId: 0 }
+  }
+}
+
+// One-click finalize across the three phases. Discovers candidates, reads weights +
+// payout addresses from chain, sorts descending, then:
+//   1) tally(rankedIds)         — freezes winners, deletes candidate boxes
+//   2) pay_winners in slices    — pays each winner its share (<= 8 accounts per txn)
+//   3) finish_tally             — flips to phase 2
+// Reports progress via onStep. Resumable: if called when already mid-payout (phase 1),
+// it skips tally and continues paying from paid_count.
+const PAY_SLICE = 8   // max winner accounts referenced per pay_winners txn
+export async function finalizeAuto({ signTransactions, address, onStep = () => {} }) {
+  let st = await fetchGovState()
+
+  // Phase 0: run tally. Need the ranked ids + their payout addresses (for the payout
+  // slices later). Capture the ranking BEFORE tally deletes the candidate boxes.
+  let rankedIds = []
+  let payoutAddrs = []
+  if (st.phase === 0) {
+    const ids = await listCandidateIds()
+    if (ids.length === 0) throw new Error('No candidates registered for this epoch')
+    const r = await buildRanking(ids)
+    rankedIds = r.rankedIds
+    payoutAddrs = r.payoutAddrs
+    onStep('Tallying…')
+    await tally({ signTransactions, address, rankedCandidateIds: rankedIds })
+    st = await fetchGovState()
+  } else if (st.phase === 1) {
+    // Resuming a payout: candidate boxes are already gone, so rebuild the payout
+    // address list from the directory ranking isn't possible here. The contract pays
+    // from its own global state regardless; the accounts array just needs each winner
+    // receiver. We reconstruct winners from the on-chain winner globals below.
+    payoutAddrs = await fetchWinnerAddrs(st.winnerCount)
+  }
+
+  // Phase 1: pay winners in slices until paid_count == winner_count.
+  if (st.phase === 1) {
+    // If we just tallied, we have payoutAddrs in ranked order; winners are the first
+    // winnerCount of them. If resuming, payoutAddrs came from the winner globals.
+    const winners = payoutAddrs.slice(0, st.winnerCount)
+    while (st.paidCount < st.winnerCount) {
+      const start = st.paidCount
+      const end = Math.min(start + PAY_SLICE, st.winnerCount)
+      const slice = winners.slice(start, end)
+      onStep(`Paying winners ${start + 1}–${end} of ${st.winnerCount}…`)
+      await payWinners({ signTransactions, address, count: end - start, slicePayoutAddrs: slice })
+      st = await fetchGovState()
+    }
+    onStep('Finishing…')
+    await finishTally({ signTransactions, address })
+    st = await fetchGovState()
+  }
+
+  onStep('Done.')
+  return st
+}
+
+// Read the frozen winner payout addresses from global state (w0..w7). Used when
+// resuming a payout after the candidate boxes are already deleted.
+export async function fetchWinnerAddrs(winnerCount) {
+  const info = await algodClient.getApplicationByID(GOV_APP_ID).do()
+  const params = pick(info, 'params') || {}
+  const gs = pick(params, 'global-state', 'globalState') || []
+  const byKey = {}
+  for (const kv of gs) {
+    const keyB64 = pick(kv, 'key')
+    const key = typeof keyB64 === 'string'
+      ? new TextDecoder().decode(Uint8Array.from(atob(keyB64), c => c.charCodeAt(0)))
+      : new TextDecoder().decode(keyB64)
+    byKey[key] = pick(kv, 'value') || {}
+  }
+  const addrs = []
+  for (let i = 0; i < Number(winnerCount) && i < 8; i++) {
+    const val = byKey['w' + i]
+    if (!val) break
+    const raw = pick(val, 'bytes')
+    if (!raw) continue
+    const bytes = typeof raw === 'string' ? Uint8Array.from(atob(raw), c => c.charCodeAt(0)) : raw
+    addrs.push(algosdk.encodeAddress(bytes))
+  }
+  return addrs
+}
+
+// Delete every candidate box on the app, one admin_delete_candidate call each. Used to
+// clear an epoch whose boxes can't be tallied (e.g. an overflowed ballot on an old
+// contract) so the app can be closed. Requires the epoch to be over (phase 2 or past
+// tally_round). Returns the ids it deleted.
+export async function clearAllCandidates({ signTransactions, address, onStep = () => {} }) {
   const ids = await listCandidateIds()
-  if (ids.length === 0) throw new Error('No candidates registered for this epoch')
-  const { rankedIds, payoutAddrs } = await buildRanking(ids)
-  return finalize({ signTransactions, address, rankedCandidateIds: rankedIds, payoutAddrs })
+  for (let i = 0; i < ids.length; i++) {
+    onStep(`Deleting candidate ${ids[i]} (${i + 1}/${ids.length})…`)
+    await adminDeleteCandidate({ signTransactions, address, candidateId: ids[i] })
+  }
+  onStep('All candidate boxes cleared.')
+  return ids
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
