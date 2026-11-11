@@ -25,7 +25,7 @@ const MICRO = 1_000_000
 // Rounds between epoch milestones. vote_open = base + STEP, vote_close = +2·STEP,
 // tally_round = +3·STEP. Equal intervals mirror the production cadence (the two-week
 // windows), just compressed to blocks for testing.
-const EPOCH_STEP = 100
+const EPOCH_STEP = 50
 const toAlgo = (m) => (Number(m || 0) / MICRO).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 function b64ToBytes(b64) {
@@ -119,7 +119,7 @@ export default function AdminVoting() {
   const epochRounds = baseBlock == null ? null : {
     voteOpen:   baseBlock + EPOCH_STEP,
     voteClose:  baseBlock + 2 * EPOCH_STEP,
-    tallyRound: baseBlock + 3 * EPOCH_STEP,
+    tallyRound: baseBlock + 2.1 * EPOCH_STEP,
   }
 
   // Convenience: pull the current round from algod so the admin doesn't look it up.
