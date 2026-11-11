@@ -130,11 +130,21 @@ class Governance(ARC4Contract):
 
     @subroutine
     def _has_live_vote(self, has_vote: UInt64, epoch: UInt64) -> bool:
-        # A vote only counts in the epoch it was cast. After finalize, candidate boxes
-        # are deleted and the pool resets, so a vote carried over from a previous epoch
-        # is stale: its candidate box no longer exists and its weight was already
-        # consumed. Treat it as no vote — never try to decrement a deleted candidate.
-        return has_vote == 1 and epoch == self.epoch_id
+        # A vote is "live" — i.e. its candidate box still exists and holds this vote's
+        # weight — only while ALL of these hold:
+        #   * has_vote == 1, and
+        #   * it was cast in the CURRENT epoch (epoch == epoch_id), and
+        #   * the epoch is still OPEN (phase == 0).
+        # The phase check is the fix for the post-finalize-same-epoch trap: finalize
+        # deletes every candidate box and flips to phase 2 WITHOUT advancing epoch_id,
+        # so between finalize and the next open_epoch a voter's box still reads
+        # epoch == epoch_id with has_vote == 1 — yet its candidate box is already gone.
+        # The earlier (epoch-only) check treated that as live and tried to decrement a
+        # deleted candidate on unstake, reverting (box_get on a missing box) and
+        # stranding the stake. Once finalized, the weight is already consumed and the
+        # box no longer exists, so the vote must be treated as not-live: skip any
+        # decrement. Cross-epoch stale votes (epoch != epoch_id) are caught as before.
+        return has_vote == 1 and epoch == self.epoch_id and self.phase == 0
 
     @subroutine
     def _sub_weight(self, cid: UInt64, delta: UInt64) -> None:
@@ -356,7 +366,11 @@ class Governance(ARC4Contract):
                 self._sub_weight(v.voted_candidate.native, reduce)
                 v.voted_weight = ArcU64(v.staked.native)
         elif v.has_vote.native == 1:
-            # Stale vote from a previous epoch: clear it without touching any candidate.
+            # Not-live vote — either from a previous epoch, or from THIS epoch after it
+            # was finalized (phase 2, candidate boxes already deleted). Its candidate box
+            # is gone, so clear the vote WITHOUT touching any candidate. This is what lets
+            # a voter always reclaim stake after finalize, instead of reverting on a
+            # box_get for the deleted candidate.
             v.has_vote = UInt8(0)
             v.voted_weight = ArcU64(0)
             v.voted_candidate = ArcU64(0)
