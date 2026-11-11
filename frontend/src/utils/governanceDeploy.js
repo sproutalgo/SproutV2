@@ -54,6 +54,10 @@ export async function buildCreateTxn({ sender, approvalProgram, clearProgram }) 
     sender, suggestedParams: sp,
     onComplete: algosdk.OnApplicationComplete.NoOpOC,
     approvalProgram, clearProgram, ...SCHEMA,
+    // The approval program exceeds the 2048-byte single-page limit (the two-phase
+    // finalize + the 8 winner-slot globals pushed it to ~2.4 KB). Request 1 extra
+    // program page (→ 4096 bytes of room). In algosdk v3 this field is `extraPages`.
+    extraPages: 1,
   })
   return { txn, txId: txn.txID() }
 }
