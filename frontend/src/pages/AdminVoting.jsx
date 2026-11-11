@@ -24,6 +24,15 @@ const APPROVAL_URL = '/contracts/gov_approval.teal'
 const CLEAR_URL    = '/contracts/gov_clear.teal'
 const MICRO = 1_000_000
 const toAlgo = (m) => (Number(m || 0) / MICRO).toLocaleString(undefined, { maximumFractionDigits: 2 })
+// Epoch round offsets from the admin's base "last block" (cumulative):
+//   vote_open  = base + OPEN_OFF            (registration window is base .. vote_open)
+//   vote_close = vote_open + CLOSE_OFF      (the voting/freeze window)
+//   tally_round= vote_close + TALLY_OFF     (tally may begin)
+// Compressed for testing; raise for the production two-week cadence. The contract
+// requires vote_open > current round, and vote_open < vote_close < tally_round.
+const OPEN_OFF = 50
+const CLOSE_OFF = 50
+const TALLY_OFF = 10
 
 function b64ToBytes(b64) {
   const bin = atob(b64); const out = new Uint8Array(bin.length)
@@ -58,9 +67,7 @@ export default function AdminVoting() {
   const [closeAppId, setCloseAppId] = useState('')
   const [closeConfirm, setCloseConfirm] = useState('')
   // epoch
-  const [voteOpen, setVoteOpen] = useState('')
-  const [voteClose, setVoteClose] = useState('')
-  const [tallyRound, setTallyRound] = useState('')
+  const [lastBlock, setLastBlock] = useState('')       // base round; the three rounds derive from it
   // candidate registration (directory-backed)
   const [dirEntries, setDirEntries] = useState([])     // approved directory entries
   const [selectedEntry, setSelectedEntry] = useState('') // chosen entry id (UUID)
@@ -115,6 +122,24 @@ export default function AdminVoting() {
     return e ? e.name : `Candidate #${num}`
   }
 
+  // Derive the three epoch rounds from the admin's base "last block" (cumulative
+  // offsets). null until a valid base is entered.
+  const baseBlock = /^\d+$/.test(lastBlock) ? Number(lastBlock) : null
+  const epochRounds = baseBlock == null ? null : {
+    voteOpen:   baseBlock + OPEN_OFF,
+    voteClose:  baseBlock + OPEN_OFF + CLOSE_OFF,
+    tallyRound: baseBlock + OPEN_OFF + CLOSE_OFF + TALLY_OFF,
+  }
+
+  // Pull the current round from algod so the admin doesn't have to look it up.
+  async function fillCurrentRound() {
+    try {
+      const status = await algodClient.status().do()
+      const r = Number(status['last-round'] ?? status.lastRound)
+      if (Number.isFinite(r)) setLastBlock(String(r))
+    } catch (e) { addToast(S(e), 'error') }
+  }
+
   async function run(label, fn, ok = 'Done') {
     try { setBusy(label); await fn(); addToast(ok, 'success') }
     catch (e) { addToast(S(e), 'error', 9000) } finally { setBusy('') }
@@ -166,18 +191,33 @@ export default function AdminVoting() {
         {deployed && <Note><strong>App {deployed.appId}</strong> — set VITE_GOV_APP_ID={deployed.appId}, then rebuild.</Note>}
       </Card>
 
-      {/* Open epoch */}
+      {/* Open epoch — one base block; the three rounds derive at fixed offsets */}
       <Card title="2. Open epoch (rounds)">
-        <Row>
-          <Field label="vote_open"><input className="input" value={voteOpen} onChange={e => setVoteOpen(e.target.value)} /></Field>
-          <Field label="vote_close (freeze)"><input className="input" value={voteClose} onChange={e => setVoteClose(e.target.value)} /></Field>
-          <Field label="tally_round"><input className="input" value={tallyRound} onChange={e => setTallyRound(e.target.value)} /></Field>
-        </Row>
-        <button className="btn" disabled={!!busy} onClick={() => run('epoch', () =>
-          openEpoch({ signTransactions, address: activeAddress, voteOpen: Number(voteOpen), voteClose: Number(voteClose), tallyRound: Number(tallyRound) }))}>
+        <Field label="Last block (base)">
+          <Row>
+            <input className="input" inputMode="numeric" placeholder="e.g. current round"
+              value={lastBlock} onChange={e => setLastBlock(e.target.value.trim())} style={{ flex: 1 }} />
+            <button className="btn btn-ghost" type="button" disabled={!!busy} onClick={fillCurrentRound}>
+              Use current round
+            </button>
+          </Row>
+          <span className="field-hint">
+            vote_open = base + {OPEN_OFF}, vote_close = base + {OPEN_OFF + CLOSE_OFF}, tally_round = base + {OPEN_OFF + CLOSE_OFF + TALLY_OFF}.
+            Registration window is base → vote_open ({OPEN_OFF} rounds to add candidates).
+          </span>
+        </Field>
+        {epochRounds && (
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+            <div>vote_open: <strong>{epochRounds.voteOpen}</strong></div>
+            <div>vote_close (freeze): <strong>{epochRounds.voteClose}</strong></div>
+            <div>tally_round: <strong>{epochRounds.tallyRound}</strong></div>
+          </div>
+        )}
+        <button className="btn" disabled={!!busy || !epochRounds} onClick={() => run('epoch', () =>
+          openEpoch({ signTransactions, address: activeAddress,
+            voteOpen: epochRounds.voteOpen, voteClose: epochRounds.voteClose, tallyRound: epochRounds.tallyRound }))}>
           {busy === 'epoch' ? 'Opening…' : 'Open epoch'}
         </button>
-        <Note>Use current round + offsets for testing (e.g. open=now, close=now+small, tally=now+bigger).</Note>
       </Card>
 
       {/* Register candidate — pick an approved directory project; payout auto-fills */}
