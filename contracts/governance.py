@@ -41,11 +41,15 @@ from algopy import (
 )
 from algopy.arc4 import abimethod, Address, Struct, UInt64 as ArcU64, UInt8, DynamicArray
 
-# Max candidates per epoch (fixed ballot). finalize reads/deletes this many boxes
-# in a single call, so it is bounded by the AVM's 8-box-reference-per-transaction
-# limit (and the per-call opcode budget). 8 keeps finalize feasible in one pooled
-# group and makes a partial-finalize box-orphan impossible. An off-chain nomination
-# phase narrows the field to these 8 finalists before they reach this contract.
+# Max candidates per epoch (fixed ballot). `tally` reads + deletes this many candidate
+# boxes in ONE transaction, so it is bounded by the AVM's 8-reference-per-transaction
+# limit. The two-phase finalize keeps tally's references to candidate boxes ONLY
+# (winner payout addresses go to global state, payouts happen in the separate
+# pay_winners phase), so the full 8 fit — the old single finalize could not, because it
+# also needed a payout-account reference per winner in the same txn. Also doubles as the
+# winner-slot count (w0..w7): a tie can make at most MAX_CANDIDATES winners, which is
+# exactly the number of global slots. An off-chain nomination phase narrows the field to
+# these 8 finalists before they reach this contract.
 MAX_CANDIDATES = 8
 # Target number of funded projects (ties can widen the actual winner set).
 TARGET_WINNERS = 3
@@ -96,6 +100,15 @@ class CandidateBox(Struct):
     weight: ArcU64            # RUNNING total weight backing this candidate
 
 
+# Winner payout addresses are frozen at tally into fixed GLOBAL state (not boxes), so
+# tally references only candidate boxes and pay_winners references only payout accounts
+# — neither phase mixes the two against the 8-reference/txn budget, and there are no
+# winner boxes to orphan. MAX_CANDIDATES = 8 winner slots are held as 8 named global
+# Address fields (w0..w7); global reads/writes cost ZERO transaction references, which
+# is the whole point. Even the widest possible tie (all 8 candidates at the cutoff)
+# fits, because stored winners can never exceed MAX_CANDIDATES.
+
+
 class Governance(ARC4Contract):
     def __init__(self) -> None:
         self.admin = Account()
@@ -106,8 +119,31 @@ class Governance(ARC4Contract):
         self.vote_close = UInt64(0)             # round votes freeze (day 14)
         self.tally_round = UInt64(0)            # round tally may begin (day 28)
         self.candidate_count = UInt64(0)
-        self.phase = UInt64(0)                  # 0 open/voting, 2 finalized
+        # phase: 0 open/voting, 1 TALLIED (winners frozen, payout in progress), 2 done.
+        # Phase 1 is the new intermediate state introduced by the two-phase finalize
+        # (tally -> pay_winners). open_epoch and admin_delete_candidate still require
+        # phase 2, so no new epoch can start and no candidate box can be hand-deleted
+        # while a payout is mid-flight.
+        self.phase = UInt64(0)
         self.bootstrapped = UInt64(0)
+
+        # ── two-phase finalize results (valid only while phase == 1) ──────────────
+        self.result_epoch = UInt64(0)           # epoch these results belong to
+        self.winner_count = UInt64(0)           # winners frozen at tally
+        self.paid_count = UInt64(0)             # payout cursor: winners paid so far
+        self.share_micro = UInt64(0)            # frozen per-winner payout (µALGO)
+
+        # Frozen winner payout addresses (phase 1 only), one global per slot. Zero
+        # transaction references to read/write — so pay_winners spends its whole 8-ref
+        # budget on payout ACCOUNTS, never on winner storage.
+        self.w0 = Global.zero_address
+        self.w1 = Global.zero_address
+        self.w2 = Global.zero_address
+        self.w3 = Global.zero_address
+        self.w4 = Global.zero_address
+        self.w5 = Global.zero_address
+        self.w6 = Global.zero_address
+        self.w7 = Global.zero_address
 
         self.voters = BoxMap(Account, VoterBox, key_prefix=b"v:")
         self.candidates = BoxMap(UInt64, CandidateBox, key_prefix=b"c:")
@@ -121,6 +157,46 @@ class Governance(ARC4Contract):
     @subroutine
     def _sprout(self) -> Asset:
         return Asset(self.sprout_asa_id)
+
+    @subroutine
+    def _set_winner(self, idx: UInt64, addr: Account) -> None:
+        # Store a winner payout address into global slot `idx` (0..MAX_CANDIDATES-1).
+        # Named globals can't be indexed dynamically in Puya, so dispatch explicitly.
+        if idx == 0:
+            self.w0 = addr
+        elif idx == 1:
+            self.w1 = addr
+        elif idx == 2:
+            self.w2 = addr
+        elif idx == 3:
+            self.w3 = addr
+        elif idx == 4:
+            self.w4 = addr
+        elif idx == 5:
+            self.w5 = addr
+        elif idx == 6:
+            self.w6 = addr
+        else:
+            self.w7 = addr
+
+    @subroutine
+    def _get_winner(self, idx: UInt64) -> Account:
+        if idx == 0:
+            return self.w0
+        elif idx == 1:
+            return self.w1
+        elif idx == 2:
+            return self.w2
+        elif idx == 3:
+            return self.w3
+        elif idx == 4:
+            return self.w4
+        elif idx == 5:
+            return self.w5
+        elif idx == 6:
+            return self.w6
+        else:
+            return self.w7
 
     @subroutine
     def _add_weight(self, cid: UInt64, delta: UInt64) -> None:
@@ -222,6 +298,14 @@ class Governance(ARC4Contract):
         self.tally_round = tally_round
         self.candidate_count = UInt64(0)
         self.phase = UInt64(0)
+        # Clear any phase-1 payout state. If this open used the recovery branch to
+        # force past an abandoned payout, this ensures no stale winner set, cursor, or
+        # share can carry into the new epoch. (pay_winners also guards on result_epoch,
+        # so a stale payout is doubly impossible.)
+        self.winner_count = UInt64(0)
+        self.paid_count = UInt64(0)
+        self.share_micro = UInt64(0)
+        self.result_epoch = self.epoch_id
 
         # NOTE: the pool is NOT snapshotted here. Harvested staking rewards flow into
         # this account throughout the epoch, so the amount to distribute is computed
@@ -431,32 +515,48 @@ class Governance(ARC4Contract):
         self.voters[Txn.sender] = v.copy()
         return new_weight
 
-    # ── tally — O(candidates), no voter iteration ──────────────────────────────
+    # ── two-phase finalize: tally -> pay_winners -> finish_tally ────────────────
+    # The old single finalize referenced every candidate box AND every winner payout
+    # account in ONE transaction. Algorand caps total references (boxes + accounts +
+    # assets + apps) at 8 PER TXN, so N candidates + W winners could exceed 8 and make
+    # finalize impossible to submit (e.g. 8 candidates + any winners). The work is now
+    # split so each phase spends its reference budget on one category:
+    #   * tally        — reads all candidate boxes (box refs only), freezes the winner
+    #                    set + per-winner share into w: boxes, deletes every candidate
+    #                    box, flips phase 0 -> 1. No payments, so no account refs.
+    #   * pay_winners  — pays a slice of winners, referencing only their payout accounts
+    #                    (+ the one w: box per winner it reads). No candidate refs.
+    #   * finish_tally — after all winners paid, deletes the w: boxes and flips 1 -> 2.
+    # All three are ADMIN-ONLY. Phase 1 is always escapable (finish_tally, and the
+    # admin recovery paths), so a tally can never trap the pool mid-payout.
 
     @abimethod()
-    def finalize(self, ranked_candidate_ids: DynamicArray[ArcU64]) -> UInt64:
-        """Permissionless, after tally_round. Caller submits all candidate ids sorted
-        by weight DESC (computed off-chain from the on-chain candidate boxes). The
-        contract VERIFIES the ordering, derives the winner set (top ~3, ties widen),
-        and pays each winner an equal share. Returns the number of winners paid.
+    def tally(self, ranked_candidate_ids: DynamicArray[ArcU64]) -> UInt64:
+        """PHASE 1 (admin). Caller submits all candidate ids sorted by weight DESC.
+        The contract VERIFIES the ordering against on-chain weights, derives the winner
+        set itself (top ~TARGET_WINNERS, ties widen), FREEZES the pool and per-winner
+        share, records each winner in a w: box, deletes all candidate boxes, and moves
+        to phase 1 (awaiting payout). Returns the winner count.
 
-        Trustless: a dishonest ordering is rejected — the contract re-checks each
-        listed candidate's weight is >= the next and derives winners itself."""
-        assert self.phase == 0, "already finalized"
+        Trustless ordering is preserved exactly as before: a dishonest ranking is
+        rejected, and the winner set is the contract's own computation, not the
+        caller's. Freezing the pool here (rather than at each payment) means the share
+        can't drift as rewards arrive between payout transactions."""
+        self._assert_admin()
+        assert self.phase == 0, "not in voting phase"
         assert Global.round >= self.tally_round, "tally not open"
         assert ranked_candidate_ids.length == self.candidate_count, "must list all candidates"
 
         n = ranked_candidate_ids.length
 
-        # A-2: an epoch with NO candidates (none registered, or a quiet epoch) is a
-        # VALID finalize, not a revert. The old `assert n > 0` wedged the contract:
-        # with zero candidates, finalize reverted, but open_epoch needs phase == 2 to
-        # start the next epoch — so the app could neither finalize nor advance, and
-        # the pool sat locked. Here, n == 0 pays nobody, deletes nothing, carries the
-        # pool forward, and flips to phase 2 so the next epoch can open. Mirrors the
-        # zero-WINNERS carry-forward already handled below.
+        # A-2: a candidate-less epoch is a VALID tally, not a revert — pay nobody, flip
+        # straight to phase 2 so the next epoch can open. (No winners to pay => skip
+        # phase 1 entirely.)
         if n == 0:
             self.candidate_count = UInt64(0)
+            self.winner_count = UInt64(0)
+            self.paid_count = UInt64(0)
+            self.result_epoch = self.epoch_id
             self.phase = UInt64(2)
             return UInt64(0)
 
@@ -480,23 +580,8 @@ class Governance(ARC4Contract):
         cut_cid: UInt64 = ranked_candidate_ids[cut_index].native
         cutoff: UInt64 = self.candidates[cut_cid].weight.native
 
-        winners = UInt64(0)
-        i = UInt64(0)
-        while i < n:
-            w = self.candidates[ranked_candidate_ids[i].native].weight.native
-            if w >= cutoff and w > 0:
-                winners += 1
-            i += 1
-        # NOTE: winners may be 0 (nobody voted). That is a VALID finalize — it pays
-        # nobody and the pool carries forward — NOT a revert. Reverting here would
-        # leave the candidate boxes undeletable and permanently block admin_close
-        # (the "register candidates, nobody votes" lock). So we proceed and only
-        # skip the payout when there are no winners.
-
-        # 3) Compute the pool LIVE, now, at tally — = balance - MBR - buffer. This
-        #    captures all staking rewards that flowed in during the epoch. A small
-        #    buffer stays above MBR so the account keeps functioning and the inner
-        #    payments can't drive it below min balance.
+        # 3) Freeze the pool NOW = balance - MBR - buffer (captures rewards that flowed
+        #    in during the epoch). Frozen so it can't drift across payout txns.
         bal = Global.current_application_address.balance
         mbr = Global.current_application_address.min_balance
         floor = mbr + POOL_BUFFER
@@ -504,35 +589,97 @@ class Governance(ARC4Contract):
         if bal > floor:
             pool = bal - floor
 
-        # Equal split among winners. Dust (pool mod winners) stays and carries over.
-        # Guard the division: winners can be 0, in which case there is no payout.
-        if winners > 0:
-            share = pool // winners
-            if share > 0:
-                i = UInt64(0)
-                while i < n:
-                    cid = ranked_candidate_ids[i].native
-                    w = self.candidates[cid].weight.native
-                    if w >= cutoff and w > 0:
-                        c = self.candidates[cid].copy()
-                        itxn.Payment(
-                            receiver=c.payout_addr.native,
-                            amount=share,
-                            fee=0,
-                        ).submit()
-                    i += 1
+        # 4) Count winners, record each payout address into a GLOBAL slot (zero refs),
+        #    THEN delete the candidate box. Winner index runs 0..winners-1 in ranked
+        #    (descending) order. Because candidate_count <= MAX_CANDIDATES == winner
+        #    slots, the stored winners can never overflow the 8 global slots.
+        winners = UInt64(0)
+        i = UInt64(0)
+        while i < n:
+            cid = ranked_candidate_ids[i].native
+            c = self.candidates[cid].copy()
+            if c.weight.native >= cutoff and c.weight.native > 0:
+                self._set_winner(winners, c.payout_addr.native)
+                winners += 1
+            # Delete the candidate box regardless (winner or not) — the epoch is over
+            # and its MBR must be released. Winner payout data is now safe in globals.
+            del self.candidates[cid]
+            i += 1
 
-        # Box hygiene: the epoch is over, so delete every candidate box to release
-        # its MBR. ranked_candidate_ids lists all candidates (asserted == count), so
-        # this clears them all. The app can then close once voter boxes are gone too.
-        j = UInt64(0)
-        while j < n:
-            del self.candidates[ranked_candidate_ids[j].native]
-            j += 1
         self.candidate_count = UInt64(0)
 
-        self.phase = UInt64(2)
+        # 5) Freeze the per-winner share. Dust (pool mod winners) stays and carries
+        #    forward. winners == 0 (nobody voted) is valid: no payout, share 0.
+        share = UInt64(0)
+        if winners > 0:
+            share = pool // winners
+
+        self.result_epoch = self.epoch_id
+        self.paid_count = UInt64(0)
+        self.share_micro = share
+
+        # If there is nothing to pay (no winners, or a zero share), there is no payout
+        # phase to run — go straight to phase 2. Otherwise enter phase 1. When we skip
+        # to phase 2, winner_count stays 0 so no stale payout can ever run.
+        if winners == 0 or share == 0:
+            self.winner_count = UInt64(0)
+            self.phase = UInt64(2)
+        else:
+            self.winner_count = winners
+            self.phase = UInt64(1)
         return winners
+
+    @abimethod()
+    def pay_winners(self, count: UInt64) -> UInt64:
+        """PHASE 2 (admin). Pay the next `count` winners their frozen share. Winner
+        payout addresses come from GLOBAL state (zero references), so this txn spends
+        its reference budget only on the payout ACCOUNTS it pays — never on candidate
+        or winner boxes. Idempotent via the paid_count cursor: a winner can never be
+        paid twice, and the total paid can never exceed winner_count * share. Call
+        repeatedly (slices of <= 8 to respect the account-reference limit) until
+        paid_count == winner_count, then finish_tally."""
+        self._assert_admin()
+        assert self.phase == 1, "no payout in progress"
+        assert self.result_epoch == self.epoch_id, "stale results"
+        assert count > 0, "zero count"
+
+        start: UInt64 = self.paid_count
+        end: UInt64 = start + count
+        if end > self.winner_count:
+            end = self.winner_count
+        assert start < end, "all winners already paid"
+
+        share: UInt64 = self.share_micro
+        i: UInt64 = start
+        while i < end:
+            itxn.Payment(
+                receiver=self._get_winner(i),
+                amount=share,
+                fee=0,
+            ).submit()
+            i += 1
+
+        self.paid_count = end
+        return end
+
+    @abimethod()
+    def finish_tally(self) -> None:
+        """PHASE 3 (admin). After every winner is paid, move to phase 2 so the next
+        epoch can open (and admin_close becomes reachable).
+
+        This is the guaranteed escape from phase 1: it requires only that all winners
+        were paid (paid_count == winner_count), which pay_winners always makes
+        reachable. Winner storage is GLOBAL state (no boxes), so there is nothing to
+        orphan — clearing the scalars is enough; the stale winner addresses in w0..w7
+        are inert because winner_count returns to 0 and phase leaves 1."""
+        self._assert_admin()
+        assert self.phase == 1, "not awaiting finish"
+        assert self.paid_count == self.winner_count, "pay all winners first"
+
+        self.winner_count = UInt64(0)
+        self.paid_count = UInt64(0)
+        self.share_micro = UInt64(0)
+        self.phase = UInt64(2)
 
     # ── discard an unbootstrapped shell (creator-only) ─────────────────────────
 
@@ -569,16 +716,20 @@ class Governance(ARC4Contract):
         never seize a voter's stake. The protocol also refuses to delete an app while
         ANY box still exists, and deleting with boxes present would permanently strand
         their MBR — so every candidate and voter box must be gone first. Voter boxes
-        delete on full unstake; candidate boxes delete at finalize, or individually via
+        delete on full unstake; candidate boxes delete at tally, or individually via
         admin_delete_candidate (the escape hatch). candidate_count == 0 confirms the
         candidate set is cleared; if the counter ever disagrees with the real boxes,
         admin_delete_candidate can always drive both to zero, so the app — and its
-        ALGO — can never be trapped. Operationally: unstake everyone, finalize (or
-        delete each candidate), confirm the app shows zero boxes off-chain, then close."""
+        ALGO — can never be trapped. Winner storage is global state (no boxes), so it
+        never blocks close. Not allowed mid-payout (phase 1): finish the payout (or
+        force past it via the open_epoch recovery branch) first, so close never abandons
+        an in-progress distribution. Operationally: unstake everyone, tally + pay +
+        finish (or delete each candidate), confirm zero boxes off-chain, then close."""
         self._assert_admin()
+        assert self.phase != 1, "finish the payout before closing"
         held = self._sprout().balance(Global.current_application_address)
         assert held == 0, "unstake all voter Sprout before closing"
-        assert self.candidate_count == 0, "clear candidates first (finalize or admin_delete_candidate)"
+        assert self.candidate_count == 0, "clear candidates first (tally or admin_delete_candidate)"
 
         itxn.AssetTransfer(
             xfer_asset=self.sprout_asa_id,
