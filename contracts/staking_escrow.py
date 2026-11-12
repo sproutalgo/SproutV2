@@ -9,7 +9,8 @@
 # Safety model (see the design spec): accounted_principal is DERIVED from the
 # token supply, never stored. Because the only lever that moves sprout_held is the
 # 1:1 deposit/withdraw transfer, the principal figure cannot drift from real ALGO
-# principal. 
+# principal. This structurally eliminates the mint/burn asymmetry that produced
+# three High-severity findings in Folks Finance xALGO.
 #
 # Invariants enforced here:
 #   I3  deposit moves ALGO in and Sprout out by the SAME amount
@@ -55,6 +56,15 @@ HARVEST_BUFFER = 1_000_000
 # it is applied at the sweep, so it is transparent and verifiable on-chain.
 ADMIN_FEE_BPS = 1_000          # 10.00%
 BPS_DENOM = 10_000
+
+# Consensus incentive eligibility: to earn staking rewards, an online keyreg must pay
+# at least the protocol's Payouts.GoOnlineFee as the fee ON THE KEYREG TRANSACTION
+# ITSELF (pooled fees from the group do NOT count). On mainnet this is 2 ALGO. The
+# escrow is a contract account, so go_online must carry that fee into its inner keyreg
+# — and crucially the ALGO must be supplied by the ADMIN via a grouped payment, never
+# drawn from pooled staker principal, so the principal-safety invariant holds. This is
+# the minimum the inner keyreg's own fee is set to when going online eligible.
+GO_ONLINE_FEE = 2_000_000      # 2 ALGO, mainnet Payouts.GoOnlineFee
 
 # M2: Algorand participation-key byte lengths (ed25519 vote/selection = 32,
 # state-proof key = 64). A malformed key would register the account online with
@@ -370,35 +380,68 @@ class StakingEscrow(ARC4Contract):
     @abimethod()
     def go_online(
         self,
+        fee_pay: gtxn.PaymentTransaction,
         vote_pk: Bytes,
         sel_pk: Bytes,
         sp_pk: Bytes,
         vote_first: UInt64,
         vote_last: UInt64,
         vote_kd: UInt64,
+        incentive_eligible: UInt64,
     ) -> None:
         """Register the escrow account ONLINE for consensus with the given keys.
- 
-        Going online does not change MBR. Participation keys can only vote in
-        consensus, never spend — that is what keeps staking non-custodial.
- 
-        M2: validate the keys and the round window before registering, so a typo or
-        a stale/expired key set can't put the account online in a broken state
-        (which silently forfeits rewards and can get it marked absent).
+
+        Group: [Payment -> escrow (admin-funded)][this call]. The admin attaches a
+        payment that funds the keyreg's fee. When incentive_eligible == 1, the inner
+        keyreg's own fee is set to GO_ONLINE_FEE (2 ALGO) so the protocol sets the
+        IncentiveEligible bit — a prerequisite for earning staking rewards. When 0, a
+        plain online registration (keyreg fee 0) is done.
+
+        WHY A GROUPED PAYMENT: the 2 ALGO fee leaves the escrow account's balance. If
+        it came from pooled ALGO it could eat into staker principal — breaking the core
+        invariant. So the ADMIN must supply it: the attached payment, from the admin,
+        tops the escrow up by exactly the fee first. Net effect on the escrow balance
+        is zero, so principal, MBR and buffer are untouched. The payment must come from
+        the admin and cover the fee, or this reverts.
+
+        Going online does not change MBR. Participation keys can only vote in consensus,
+        never spend — that is what keeps staking non-custodial.
+
+        M2: validate the keys and the round window before registering, so a typo or a
+        stale/expired key set can't put the account online in a broken state (which
+        silently forfeits rewards and can get it marked absent).
         """
         self._assert_admin()
         assert self.sprout_asa_id != 0, "not bootstrapped"  # M-A
- 
+        assert incentive_eligible <= 1, "incentive_eligible must be 0 or 1"
+
         # Key byte lengths must match Algorand's ed25519 / state-proof formats.
         assert vote_pk.length == VOTE_PK_LEN, "vote key must be 32 bytes"
         assert sel_pk.length == SEL_PK_LEN, "selection key must be 32 bytes"
         assert sp_pk.length == SP_PK_LEN, "state-proof key must be 64 bytes"
- 
+
         # Round window must be sane and not already expired.
         assert vote_last > vote_first, "vote_last must exceed vote_first"
         assert vote_last > Global.round, "participation window already expired"
         assert vote_kd > 0, "vote key dilution must be positive"
- 
+
+        # The keyreg fee: GO_ONLINE_FEE when registering eligible, else 0.
+        keyreg_fee = UInt64(0)
+        if incentive_eligible == 1:
+            keyreg_fee = UInt64(GO_ONLINE_FEE)
+
+        # ADMIN-funded fee. The attached payment must be the group member BEFORE this
+        # call, sent by the admin to the escrow, covering the keyreg fee in full. This
+        # tops the escrow up by exactly what the inner keyreg will spend, so no staker
+        # principal is ever consumed to pay it. For a plain (fee 0) registration the
+        # required top-up is 0, so any admin payment (including none in the group) is
+        # fine — we only assert when a fee is actually charged.
+        if keyreg_fee > 0:
+            assert fee_pay.group_index < Txn.group_index, "fee payment must precede this call"
+            assert fee_pay.receiver == Global.current_application_address, "fee payment must target the escrow"
+            assert fee_pay.sender == self.admin, "fee payment must come from the admin"
+            assert fee_pay.amount >= keyreg_fee, "fee payment must cover the GoOnlineFee"
+
         itxn.KeyRegistration(
             vote_key=vote_pk,
             selection_key=sel_pk,
@@ -406,7 +449,7 @@ class StakingEscrow(ARC4Contract):
             vote_first=vote_first,
             vote_last=vote_last,
             vote_key_dilution=vote_kd,
-            fee=0,
+            fee=keyreg_fee,
         ).submit()
         self.is_online = UInt64(1)
  

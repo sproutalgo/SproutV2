@@ -3,17 +3,17 @@
 
 // algopy.arc4.ARC4Contract.approval_program() -> uint64:
 main:
-    intcblock 0 1 2 32 10000000000000000
+    intcblock 0 1 8 2 10000000000000000
     bytecblock "sprout_asa_id" 0x151f7c75 "admin" "funding_pool_addr" "is_online" "total_admin_fee" "total_harvested" "paused"
     txn ApplicationID
     bnz main_after_if_else@2
-    // contracts/staking_escrow.py:71-72
+    // contracts/staking_escrow.py:80-81
     // # Set once by bootstrap(); 0 until then.
     // self.sprout_asa_id = UInt64(0)
     bytec_0 // "sprout_asa_id"
     intc_0 // 0
     app_global_put
-    // contracts/staking_escrow.py:73-83
+    // contracts/staking_escrow.py:82-92
     // # Funding-pool destination. Set once at bootstrap, then IMMUTABLE (M1 — no
     // # set_pool). Harvest pays THIS address.
     // #
@@ -28,32 +28,32 @@ main:
     bytec_3 // "funding_pool_addr"
     global ZeroAddress
     app_global_put
-    // contracts/staking_escrow.py:84-86
+    // contracts/staking_escrow.py:93-95
     // # Admin manages keyreg and the deposit pause. Set once at bootstrap, then
     // # IMMUTABLE (M3 — no set_admin). Pass a multisig here for safety.
     // self.admin = Account()
     bytec_2 // "admin"
     global ZeroAddress
     app_global_put
-    // contracts/staking_escrow.py:87-88
+    // contracts/staking_escrow.py:96-97
     // # 0/1 consensus registration state (telemetry; keyreg itself is the source of truth).
     // self.is_online = UInt64(0)
     bytec 4 // "is_online"
     intc_0 // 0
     app_global_put
-    // contracts/staking_escrow.py:89-90
+    // contracts/staking_escrow.py:98-99
     // # Lifetime microAlgo swept out as rewards (admin fee + pool), telemetry only.
     // self.total_harvested = UInt64(0)
     bytec 6 // "total_harvested"
     intc_0 // 0
     app_global_put
-    // contracts/staking_escrow.py:91-92
+    // contracts/staking_escrow.py:100-101
     // # Lifetime microAlgo paid to the admin as the harvest fee (telemetry only).
     // self.total_admin_fee = UInt64(0)
     bytec 5 // "total_admin_fee"
     intc_0 // 0
     app_global_put
-    // contracts/staking_escrow.py:93-94
+    // contracts/staking_escrow.py:102-103
     // # Deposit circuit breaker. Withdraw is NEVER gated by this.
     // self.paused = UInt64(0)
     bytec 7 // "paused"
@@ -61,7 +61,7 @@ main:
     app_global_put
 
 main_after_if_else@2:
-    // contracts/staking_escrow.py:69
+    // contracts/staking_escrow.py:78
     // class StakingEscrow(ARC4Contract):
     txn NumAppArgs
     bz main___algopy_default_create@25
@@ -70,20 +70,20 @@ main_after_if_else@2:
     match main_discard_unbootstrapped_route@5 main_admin_close_route@6
 
 main_switch_case_next@7:
-    // contracts/staking_escrow.py:69
+    // contracts/staking_escrow.py:78
     // class StakingEscrow(ARC4Contract):
     txn OnCompletion
     !
     assert
     txn ApplicationID
     assert
-    pushbytess 0x93b810f5 0x0dd33ee3 0x3298e7c0 0xeff4513d 0xf160d61f 0x2817a18c 0xb79ec447 0xecae4815 0x33f970ad 0xa2206089 0x08f81fea 0x7b3a8486 0x2ceff722 // method "bootstrap(address,address)uint64", method "set_pause(uint64)void", method "deposit(pay)uint64", method "withdraw(axfer)uint64", method "harvest()uint64", method "go_online(byte[],byte[],byte[],uint64,uint64,uint64)void", method "go_offline()void", method "get_principal()uint64", method "get_surplus()uint64", method "get_state()uint64", method "get_admin_fee_bps()uint64", method "get_total_admin_fee()uint64", method "preview_harvest_split()uint64"
+    pushbytess 0x93b810f5 0x0dd33ee3 0x3298e7c0 0xeff4513d 0xf160d61f 0x077c3105 0xb79ec447 0xecae4815 0x33f970ad 0xa2206089 0x08f81fea 0x7b3a8486 0x2ceff722 // method "bootstrap(address,address)uint64", method "set_pause(uint64)void", method "deposit(pay)uint64", method "withdraw(axfer)uint64", method "harvest()uint64", method "go_online(pay,byte[],byte[],byte[],uint64,uint64,uint64,uint64)void", method "go_offline()void", method "get_principal()uint64", method "get_surplus()uint64", method "get_state()uint64", method "get_admin_fee_bps()uint64", method "get_total_admin_fee()uint64", method "preview_harvest_split()uint64"
     txna ApplicationArgs 0
     match bootstrap set_pause deposit withdraw harvest go_online go_offline get_principal get_surplus get_state main_get_admin_fee_bps_route@19 get_total_admin_fee preview_harvest_split
     err
 
 main_get_admin_fee_bps_route@19:
-    // contracts/staking_escrow.py:534
+    // contracts/staking_escrow.py:576
     // @abimethod(readonly=True)
     pushbytes 0x151f7c7500000000000003e8
     log
@@ -91,7 +91,7 @@ main_get_admin_fee_bps_route@19:
     return
 
 main_admin_close_route@6:
-    // contracts/staking_escrow.py:453
+    // contracts/staking_escrow.py:495
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -102,7 +102,7 @@ main_admin_close_route@6:
     b admin_close
 
 main_discard_unbootstrapped_route@5:
-    // contracts/staking_escrow.py:426
+    // contracts/staking_escrow.py:468
     // @abimethod(allow_actions=["DeleteApplication"])
     txn OnCompletion
     pushint 5 // DeleteApplication
@@ -123,28 +123,28 @@ main___algopy_default_create@25:
 
 // staking_escrow.StakingEscrow.bootstrap[routing]() -> void:
 bootstrap:
-    // contracts/staking_escrow.py:147
+    // contracts/staking_escrow.py:156
     // @abimethod()
     txna ApplicationArgs 1
     dup
     len
-    intc_3 // 32
+    pushint 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
     txna ApplicationArgs 2
     dup
     len
-    intc_3 // 32
+    pushint 32
     ==
     assert // invalid number of bytes for arc4.static_array<arc4.uint8, 32>
-    // contracts/staking_escrow.py:162-163
+    // contracts/staking_escrow.py:171-172
     // # Only the deployer may bootstrap, and only once.
     // assert Txn.sender == Global.creator_address, "deployer only"
     txn Sender
     global CreatorAddress
     ==
     assert // deployer only
-    // contracts/staking_escrow.py:164
+    // contracts/staking_escrow.py:173
     // assert self.sprout_asa_id == 0, "already bootstrapped"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
@@ -152,20 +152,20 @@ bootstrap:
     assert // check self.sprout_asa_id exists
     !
     assert // already bootstrapped
-    // contracts/staking_escrow.py:166-167
+    // contracts/staking_escrow.py:175-176
     // # Immutable references must be real.
     // assert admin.native != Global.zero_address, "admin cannot be zero"
     dig 1
     global ZeroAddress
     !=
     assert // admin cannot be zero
-    // contracts/staking_escrow.py:168
+    // contracts/staking_escrow.py:177
     // assert pool_addr.native != Global.zero_address, "pool address cannot be zero"
     dup
     global ZeroAddress
     !=
     assert // pool address cannot be zero
-    // contracts/staking_escrow.py:170-199
+    // contracts/staking_escrow.py:179-208
     // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
     // # address — permanently (a role zeroed at creation is irreversibly locked on
     // # Algorand). So supply can never be minted beyond the fixed total, no account
@@ -197,31 +197,31 @@ bootstrap:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:196
+    // contracts/staking_escrow.py:205
     // manager=Global.current_application_address,
     global CurrentApplicationAddress
-    // contracts/staking_escrow.py:197
+    // contracts/staking_escrow.py:206
     // default_frozen=False,
     intc_0 // 0
     itxn_field ConfigAssetDefaultFrozen
     itxn_field ConfigAssetManager
-    // contracts/staking_escrow.py:195
+    // contracts/staking_escrow.py:204
     // asset_name=b"Sprout",
     pushbytes 0x5370726f7574
     itxn_field ConfigAssetName
-    // contracts/staking_escrow.py:194
+    // contracts/staking_escrow.py:203
     // unit_name=b"SPRT",
     pushbytes 0x53505254
     itxn_field ConfigAssetUnitName
-    // contracts/staking_escrow.py:193
+    // contracts/staking_escrow.py:202
     // decimals=6,
     pushint 6
     itxn_field ConfigAssetDecimals
-    // contracts/staking_escrow.py:192
+    // contracts/staking_escrow.py:201
     // total=SUPPLY_BASE,
     intc 4 // 10000000000000000
     itxn_field ConfigAssetTotal
-    // contracts/staking_escrow.py:170-191
+    // contracts/staking_escrow.py:179-200
     // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
     // # address — permanently (a role zeroed at creation is irreversibly locked on
     // # Algorand). So supply can never be minted beyond the fixed total, no account
@@ -246,11 +246,11 @@ bootstrap:
     // created = itxn.AssetConfig(
     pushint 3 // acfg
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:198
+    // contracts/staking_escrow.py:207
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:170-199
+    // contracts/staking_escrow.py:179-208
     // # H1: Non-custodial token. reserve, freeze and clawback are left as the zero
     // # address — permanently (a role zeroed at creation is irreversibly locked on
     // # Algorand). So supply can never be minted beyond the fixed total, no account
@@ -282,28 +282,28 @@ bootstrap:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:201
+    // contracts/staking_escrow.py:210
     // self.sprout_asa_id = created.created_asset.id
     bytec_0 // "sprout_asa_id"
     itxn CreatedAssetID
     app_global_put
-    // contracts/staking_escrow.py:202
+    // contracts/staking_escrow.py:211
     // self.admin = admin.native
     bytec_2 // "admin"
     uncover 2
     app_global_put
-    // contracts/staking_escrow.py:203
+    // contracts/staking_escrow.py:212
     // self.funding_pool_addr = pool_addr.native
     bytec_3 // "funding_pool_addr"
     swap
     app_global_put
-    // contracts/staking_escrow.py:204
+    // contracts/staking_escrow.py:213
     // return self.sprout_asa_id
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // contracts/staking_escrow.py:147
+    // contracts/staking_escrow.py:156
     // @abimethod()
     itob
     bytec_1 // 0x151f7c75
@@ -316,30 +316,30 @@ bootstrap:
 
 // staking_escrow.StakingEscrow.set_pause[routing]() -> void:
 set_pause:
-    // contracts/staking_escrow.py:206
+    // contracts/staking_escrow.py:215
     // @abimethod()
     txna ApplicationArgs 1
     dup
     len
-    pushint 8
+    intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // contracts/staking_escrow.py:208
+    // contracts/staking_escrow.py:217
     // self._assert_admin()
     callsub _assert_admin
-    // contracts/staking_escrow.py:209
+    // contracts/staking_escrow.py:218
     // assert flag <= 1, "flag must be 0 or 1"
     dup
     intc_1 // 1
     <=
     assert // flag must be 0 or 1
-    // contracts/staking_escrow.py:210
+    // contracts/staking_escrow.py:219
     // self.paused = flag
     bytec 7 // "paused"
     swap
     app_global_put
-    // contracts/staking_escrow.py:206
+    // contracts/staking_escrow.py:215
     // @abimethod()
     intc_1 // 1
     return
@@ -347,7 +347,7 @@ set_pause:
 
 // staking_escrow.StakingEscrow.deposit[routing]() -> void:
 deposit:
-    // contracts/staking_escrow.py:216
+    // contracts/staking_escrow.py:225
     // @abimethod()
     txn GroupIndex
     intc_1 // 1
@@ -357,7 +357,7 @@ deposit:
     intc_1 // pay
     ==
     assert // transaction type is pay
-    // contracts/staking_escrow.py:222
+    // contracts/staking_escrow.py:231
     // assert self.paused == 0, "deposits paused"
     intc_0 // 0
     bytec 7 // "paused"
@@ -365,7 +365,7 @@ deposit:
     assert // check self.paused exists
     !
     assert // deposits paused
-    // contracts/staking_escrow.py:223
+    // contracts/staking_escrow.py:232
     // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
@@ -373,7 +373,7 @@ deposit:
     assert // check self.sprout_asa_id exists
     dup
     assert // not bootstrapped
-    // contracts/staking_escrow.py:225-228
+    // contracts/staking_escrow.py:234-237
     // # H3-style ordering guard: the payment must come BEFORE this app call in
     // # the group, so a later txn in the same group can't be reinterpreted as the
     // # funding payment for this mint.
@@ -383,7 +383,7 @@ deposit:
     txn GroupIndex
     <
     assert // payment must precede this call
-    // contracts/staking_escrow.py:230-231
+    // contracts/staking_escrow.py:239-240
     // # The payment must be to the app account, from the caller, nonzero.
     // assert pay.receiver == Global.current_application_address, "pay must target escrow"
     dig 1
@@ -391,22 +391,22 @@ deposit:
     global CurrentApplicationAddress
     ==
     assert // pay must target escrow
-    // contracts/staking_escrow.py:232
+    // contracts/staking_escrow.py:241
     // assert pay.sender == Txn.sender, "payer must be caller"
     dig 1
     gtxns Sender
     txn Sender
     ==
     assert // payer must be caller
-    // contracts/staking_escrow.py:233
+    // contracts/staking_escrow.py:242
     // amount = pay.amount
     swap
     gtxns Amount
-    // contracts/staking_escrow.py:234
+    // contracts/staking_escrow.py:243
     // assert amount > 0, "zero deposit"
     dup
     assert // zero deposit
-    // contracts/staking_escrow.py:236-239
+    // contracts/staking_escrow.py:245-248
     // # Depositor must already be opted into the Sprout ASA, or the inner
     // # transfer back to them would fail and revert the whole group. Check it
     // # up front with a clear error instead of a late, opaque failure.
@@ -416,7 +416,7 @@ deposit:
     asset_holding_get AssetBalance
     bury 1
     assert // opt into Sprout before depositing
-    // contracts/staking_escrow.py:241-247
+    // contracts/staking_escrow.py:250-256
     // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
@@ -425,7 +425,7 @@ deposit:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:244
+    // contracts/staking_escrow.py:253
     // asset_receiver=Txn.sender,
     txn Sender
     dig 1
@@ -433,16 +433,16 @@ deposit:
     itxn_field AssetReceiver
     swap
     itxn_field XferAsset
-    // contracts/staking_escrow.py:241-242
+    // contracts/staking_escrow.py:250-251
     // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
     // itxn.AssetTransfer(
     pushint 4 // axfer
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:246
+    // contracts/staking_escrow.py:255
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:241-247
+    // contracts/staking_escrow.py:250-256
     // # I3: send back EXACTLY `amount` Sprout. 1:1, no fee skim.
     // itxn.AssetTransfer(
     //     xfer_asset=self.sprout_asa_id,
@@ -451,7 +451,7 @@ deposit:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:216
+    // contracts/staking_escrow.py:225
     // @abimethod()
     itob
     bytec_1 // 0x151f7c75
@@ -464,7 +464,7 @@ deposit:
 
 // staking_escrow.StakingEscrow.withdraw[routing]() -> void:
 withdraw:
-    // contracts/staking_escrow.py:255
+    // contracts/staking_escrow.py:264
     // @abimethod()
     txn GroupIndex
     intc_1 // 1
@@ -474,7 +474,7 @@ withdraw:
     pushint 4 // axfer
     ==
     assert // transaction type is axfer
-    // contracts/staking_escrow.py:262
+    // contracts/staking_escrow.py:271
     // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
@@ -482,7 +482,7 @@ withdraw:
     assert // check self.sprout_asa_id exists
     dup
     assert // not bootstrapped
-    // contracts/staking_escrow.py:264-272
+    // contracts/staking_escrow.py:273-281
     // # H3: the asset transfer must come BEFORE this app call in the group.
     // # The payout is read straight off the referenced `axfer` (algo_out == n ==
     // # axfer.asset_amount), not from an account balance, so this ordering guard
@@ -497,81 +497,81 @@ withdraw:
     txn GroupIndex
     <
     assert // asset transfer must precede this call
-    // contracts/staking_escrow.py:274
+    // contracts/staking_escrow.py:283
     // assert axfer.xfer_asset == self._sprout(), "wrong asset"
     dig 1
     gtxns XferAsset
     ==
     assert // wrong asset
-    // contracts/staking_escrow.py:275
+    // contracts/staking_escrow.py:284
     // assert axfer.asset_receiver == Global.current_application_address, "must send Sprout to escrow"
     dup
     gtxns AssetReceiver
     global CurrentApplicationAddress
     ==
     assert // must send Sprout to escrow
-    // contracts/staking_escrow.py:276
+    // contracts/staking_escrow.py:285
     // assert axfer.sender == Txn.sender, "sender must be caller"
     dup
     gtxns Sender
     txn Sender
     ==
     assert // sender must be caller
-    // contracts/staking_escrow.py:278
+    // contracts/staking_escrow.py:287
     // n = axfer.asset_amount
     gtxns AssetAmount
-    // contracts/staking_escrow.py:279
+    // contracts/staking_escrow.py:288
     // assert n > 0, "zero withdraw"
     dup
     assert // zero withdraw
-    // contracts/staking_escrow.py:296-297
+    // contracts/staking_escrow.py:305-306
     // # I5: paying out must not drop the account below its live minimum balance.
     // app_bal = Global.current_application_address.balance
     global CurrentApplicationAddress
     acct_params_get AcctBalance
     assert // account funded
-    // contracts/staking_escrow.py:121-123
+    // contracts/staking_escrow.py:130-132
     // # Live minimum balance of the app account (base + per-ASA + any boxes).
     // # Read from the ledger, NEVER hardcoded, so a protocol MBR change can't strand funds.
     // return Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // contracts/staking_escrow.py:298
+    // contracts/staking_escrow.py:307
     // assert app_bal >= algo_out + self._live_mbr(), "would breach min balance"
     dig 2
     +
     >=
     assert // would breach min balance
-    // contracts/staking_escrow.py:300-304
+    // contracts/staking_escrow.py:309-313
     // itxn.Payment(
     //     receiver=Txn.sender,
     //     amount=algo_out,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:301
+    // contracts/staking_escrow.py:310
     // receiver=Txn.sender,
     txn Sender
     dig 1
     itxn_field Amount
     itxn_field Receiver
-    // contracts/staking_escrow.py:300
+    // contracts/staking_escrow.py:309
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:303
+    // contracts/staking_escrow.py:312
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:300-304
+    // contracts/staking_escrow.py:309-313
     // itxn.Payment(
     //     receiver=Txn.sender,
     //     amount=algo_out,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:255
+    // contracts/staking_escrow.py:264
     // @abimethod()
     itob
     bytec_1 // 0x151f7c75
@@ -584,7 +584,7 @@ withdraw:
 
 // staking_escrow.StakingEscrow.harvest[routing]() -> void:
 harvest:
-    // contracts/staking_escrow.py:325
+    // contracts/staking_escrow.py:334
     // assert self.funding_pool_addr != Global.zero_address, "pool unset"
     intc_0 // 0
     bytec_3 // "funding_pool_addr"
@@ -593,31 +593,31 @@ harvest:
     global ZeroAddress
     !=
     assert // pool unset
-    // contracts/staking_escrow.py:327
+    // contracts/staking_escrow.py:336
     // app_bal = Global.current_application_address.balance
     global CurrentApplicationAddress
     acct_params_get AcctBalance
     assert // account funded
-    // contracts/staking_escrow.py:329-333
+    // contracts/staking_escrow.py:338-342
     // # I5/I6 + C1: the account must cover principal + MBR + buffer before we
     // # sweep anything. Checked subtraction — revert rather than ever touch
     // # principal (the fix the Folks reports all lacked), and keep the buffer in
     // # reserve so a later MBR increase can't strand withdrawals.
     // floor = self._harvest_floor()
     callsub _harvest_floor
-    // contracts/staking_escrow.py:334
+    // contracts/staking_escrow.py:343
     // assert app_bal >= floor, "no surplus: balance below principal+mbr+buffer"
     dup2
     >=
     assert // no surplus: balance below principal+mbr+buffer
-    // contracts/staking_escrow.py:335
+    // contracts/staking_escrow.py:344
     // surplus = app_bal - floor
     -
     dupn 2
-    // contracts/staking_escrow.py:336
+    // contracts/staking_escrow.py:345
     // assert surplus > 0, "nothing to harvest"
     assert // nothing to harvest
-    // contracts/staking_escrow.py:338-342
+    // contracts/staking_escrow.py:347-351
     // # Split the surplus: admin fee is floor(surplus * bps / 10000); the pool gets
     // # the exact remainder (surplus - admin_cut), so rounding dust always favors the
     // # pool and no microAlgo is ever stranded. Multiplication is bounded by the
@@ -630,26 +630,26 @@ harvest:
     /
     dup
     cover 3
-    // contracts/staking_escrow.py:343
+    // contracts/staking_escrow.py:352
     // pool_amt = surplus - admin_cut
     swap
     dig 1
     -
     swap
-    // contracts/staking_escrow.py:345-348
+    // contracts/staking_escrow.py:354-357
     // # Admin fee payment — only emitted when it rounds to a nonzero amount, so a
     // # dust-sized harvest (where admin_cut floors to 0) never attempts a zero
     // # payment. When admin_cut == 0 the pool simply receives the whole surplus.
     // if admin_cut > 0:
     bz harvest_after_if_else@4
-    // contracts/staking_escrow.py:349-353
+    // contracts/staking_escrow.py:358-362
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=admin_cut,
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:350
+    // contracts/staking_escrow.py:359
     // receiver=self.admin,
     intc_0 // 0
     bytec_2 // "admin"
@@ -660,22 +660,22 @@ harvest:
     cover 2
     itxn_field Amount
     itxn_field Receiver
-    // contracts/staking_escrow.py:349
+    // contracts/staking_escrow.py:358
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:352
+    // contracts/staking_escrow.py:361
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:349-353
+    // contracts/staking_escrow.py:358-362
     // itxn.Payment(
     //     receiver=self.admin,
     //     amount=admin_cut,
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:354
+    // contracts/staking_escrow.py:363
     // self.total_admin_fee += admin_cut
     intc_0 // 0
     bytec 5 // "total_admin_fee"
@@ -687,7 +687,7 @@ harvest:
     app_global_put
 
 harvest_after_if_else@4:
-    // contracts/staking_escrow.py:356-362
+    // contracts/staking_escrow.py:365-371
     // # Pool payment — pool_amt is always > 0 here (admin_cut < surplus whenever the
     // # fee is under 100%), so this inner payment never has a zero amount.
     // itxn.Payment(
@@ -696,7 +696,7 @@ harvest_after_if_else@4:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:127-130
+    // contracts/staking_escrow.py:136-139
     // # The funding pool's receiving account. For testing this is the wallet
     // # address pinned at bootstrap. (Production: swap for an app-id-derived
     // # address to remove the mistype risk — see the field comment.)
@@ -707,17 +707,17 @@ harvest_after_if_else@4:
     assert // check self.funding_pool_addr exists
     itxn_field Receiver
     itxn_field Amount
-    // contracts/staking_escrow.py:356-358
+    // contracts/staking_escrow.py:365-367
     // # Pool payment — pool_amt is always > 0 here (admin_cut < surplus whenever the
     // # fee is under 100%), so this inner payment never has a zero amount.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:361
+    // contracts/staking_escrow.py:370
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:356-362
+    // contracts/staking_escrow.py:365-371
     // # Pool payment — pool_amt is always > 0 here (admin_cut < surplus whenever the
     // # fee is under 100%), so this inner payment never has a zero amount.
     // itxn.Payment(
@@ -726,7 +726,7 @@ harvest_after_if_else@4:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:364
+    // contracts/staking_escrow.py:373
     // self.total_harvested += surplus
     intc_0 // 0
     bytec 6 // "total_harvested"
@@ -737,7 +737,7 @@ harvest_after_if_else@4:
     bytec 6 // "total_harvested"
     swap
     app_global_put
-    // contracts/staking_escrow.py:312
+    // contracts/staking_escrow.py:321
     // @abimethod()
     itob
     bytec_1 // 0x151f7c75
@@ -750,112 +750,204 @@ harvest_after_if_else@4:
 
 // staking_escrow.StakingEscrow.go_online[routing]() -> void:
 go_online:
-    // contracts/staking_escrow.py:371
+    // contracts/staking_escrow.py:380
     // @abimethod()
+    txn GroupIndex
+    intc_1 // 1
+    -
+    dup
+    gtxns TypeEnum
+    intc_1 // pay
+    ==
+    assert // transaction type is pay
     txna ApplicationArgs 1
     dup
     intc_0 // 0
     extract_uint16 // on error: invalid array length header
-    intc_2 // 2
+    intc_3 // 2
     +
     dig 1
     len
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
     extract 2 0
+    dup
     txna ApplicationArgs 2
     dup
     intc_0 // 0
     extract_uint16 // on error: invalid array length header
-    intc_2 // 2
+    intc_3 // 2
     +
     dig 1
     len
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
     extract 2 0
+    dup
+    cover 2
     txna ApplicationArgs 3
     dup
     intc_0 // 0
     extract_uint16 // on error: invalid array length header
-    intc_2 // 2
+    intc_3 // 2
     +
     dig 1
     len
     ==
     assert // invalid number of bytes for arc4.dynamic_array<arc4.uint8>
     extract 2 0
+    dup
+    cover 3
     txna ApplicationArgs 4
     dup
     len
-    pushint 8
+    intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
+    dup
+    cover 4
     txna ApplicationArgs 5
     dup
     len
-    pushint 8
+    intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
+    dup
+    cover 5
     txna ApplicationArgs 6
     dup
     len
-    pushint 8
+    intc_2 // 8
     ==
     assert // invalid number of bytes for arc4.uint64
     btoi
-    // contracts/staking_escrow.py:390
+    dup
+    cover 2
+    cover 6
+    txna ApplicationArgs 7
+    dup
+    len
+    intc_2 // 8
+    ==
+    assert // invalid number of bytes for arc4.uint64
+    btoi
+    // contracts/staking_escrow.py:414
     // self._assert_admin()
     callsub _assert_admin
-    // contracts/staking_escrow.py:391
+    // contracts/staking_escrow.py:415
     // assert self.sprout_asa_id != 0, "not bootstrapped"  # M-A
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
     assert // not bootstrapped
-    // contracts/staking_escrow.py:393-394
+    // contracts/staking_escrow.py:416
+    // assert incentive_eligible <= 1, "incentive_eligible must be 0 or 1"
+    dup
+    intc_1 // 1
+    <=
+    assert // incentive_eligible must be 0 or 1
+    // contracts/staking_escrow.py:418-419
     // # Key byte lengths must match Algorand's ed25519 / state-proof formats.
     // assert vote_pk.length == VOTE_PK_LEN, "vote key must be 32 bytes"
-    dig 5
+    uncover 6
     len
-    intc_3 // 32
+    pushint 32
     ==
     assert // vote key must be 32 bytes
-    // contracts/staking_escrow.py:395
+    // contracts/staking_escrow.py:420
     // assert sel_pk.length == SEL_PK_LEN, "selection key must be 32 bytes"
-    dig 4
+    uncover 5
     len
-    intc_3 // 32
+    pushint 32
     ==
     assert // selection key must be 32 bytes
-    // contracts/staking_escrow.py:396
+    // contracts/staking_escrow.py:421
     // assert sp_pk.length == SP_PK_LEN, "state-proof key must be 64 bytes"
-    dig 3
+    uncover 4
     len
     pushint 64
     ==
     assert // state-proof key must be 64 bytes
-    // contracts/staking_escrow.py:398-399
+    // contracts/staking_escrow.py:423-424
     // # Round window must be sane and not already expired.
     // assert vote_last > vote_first, "vote_last must exceed vote_first"
     dig 1
-    dig 3
+    uncover 4
     >
     assert // vote_last must exceed vote_first
-    // contracts/staking_escrow.py:400
+    // contracts/staking_escrow.py:425
     // assert vote_last > Global.round, "participation window already expired"
-    dig 1
     global Round
-    >
+    uncover 2
+    <
     assert // participation window already expired
-    // contracts/staking_escrow.py:401
+    // contracts/staking_escrow.py:426
     // assert vote_kd > 0, "vote key dilution must be positive"
-    dup
+    swap
     assert // vote key dilution must be positive
-    // contracts/staking_escrow.py:403-411
+    // contracts/staking_escrow.py:428-429
+    // # The keyreg fee: GO_ONLINE_FEE when registering eligible, else 0.
+    // keyreg_fee = UInt64(0)
+    intc_0 // 0
+    cover 7
+    // contracts/staking_escrow.py:430
+    // if incentive_eligible == 1:
+    intc_1 // 1
+    ==
+    bz go_online_after_if_else@3
+    // contracts/staking_escrow.py:431
+    // keyreg_fee = UInt64(GO_ONLINE_FEE)
+    pushint 2000000
+    bury 7
+
+go_online_after_if_else@3:
+    // contracts/staking_escrow.py:433-439
+    // # ADMIN-funded fee. The attached payment must be the group member BEFORE this
+    // # call, sent by the admin to the escrow, covering the keyreg fee in full. This
+    // # tops the escrow up by exactly what the inner keyreg will spend, so no staker
+    // # principal is ever consumed to pay it. For a plain (fee 0) registration the
+    // # required top-up is 0, so any admin payment (including none in the group) is
+    // # fine — we only assert when a fee is actually charged.
+    // if keyreg_fee > 0:
+    dig 6
+    bz go_online_after_if_else@5
+    // contracts/staking_escrow.py:440
+    // assert fee_pay.group_index < Txn.group_index, "fee payment must precede this call"
+    dig 7
+    dup
+    gtxns GroupIndex
+    txn GroupIndex
+    <
+    assert // fee payment must precede this call
+    // contracts/staking_escrow.py:441
+    // assert fee_pay.receiver == Global.current_application_address, "fee payment must target the escrow"
+    dup
+    gtxns Receiver
+    global CurrentApplicationAddress
+    ==
+    assert // fee payment must target the escrow
+    // contracts/staking_escrow.py:442
+    // assert fee_pay.sender == self.admin, "fee payment must come from the admin"
+    dup
+    gtxns Sender
+    intc_0 // 0
+    bytec_2 // "admin"
+    app_global_get_ex
+    assert // check self.admin exists
+    ==
+    assert // fee payment must come from the admin
+    // contracts/staking_escrow.py:443
+    // assert fee_pay.amount >= keyreg_fee, "fee payment must cover the GoOnlineFee"
+    gtxns Amount
+    dig 7
+    >=
+    assert // fee payment must cover the GoOnlineFee
+
+go_online_after_if_else@5:
+    // contracts/staking_escrow.py:445-453
     // itxn.KeyRegistration(
     //     vote_key=vote_pk,
     //     selection_key=sel_pk,
@@ -863,7 +955,7 @@ go_online:
     //     vote_first=vote_first,
     //     vote_last=vote_last,
     //     vote_key_dilution=vote_kd,
-    //     fee=0,
+    //     fee=keyreg_fee,
     // ).submit()
     itxn_begin
     itxn_field VoteKeyDilution
@@ -872,15 +964,13 @@ go_online:
     itxn_field StateProofPK
     itxn_field SelectionPK
     itxn_field VotePK
-    // contracts/staking_escrow.py:403
+    // contracts/staking_escrow.py:445
     // itxn.KeyRegistration(
-    intc_2 // keyreg
+    intc_3 // keyreg
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:410
-    // fee=0,
-    intc_0 // 0
+    dup
     itxn_field Fee
-    // contracts/staking_escrow.py:403-411
+    // contracts/staking_escrow.py:445-453
     // itxn.KeyRegistration(
     //     vote_key=vote_pk,
     //     selection_key=sel_pk,
@@ -888,15 +978,15 @@ go_online:
     //     vote_first=vote_first,
     //     vote_last=vote_last,
     //     vote_key_dilution=vote_kd,
-    //     fee=0,
+    //     fee=keyreg_fee,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:412
+    // contracts/staking_escrow.py:454
     // self.is_online = UInt64(1)
     bytec 4 // "is_online"
     intc_1 // 1
     app_global_put
-    // contracts/staking_escrow.py:371
+    // contracts/staking_escrow.py:380
     // @abimethod()
     intc_1 // 1
     return
@@ -904,30 +994,30 @@ go_online:
 
 // staking_escrow.StakingEscrow.go_offline[routing]() -> void:
 go_offline:
-    // contracts/staking_escrow.py:417
+    // contracts/staking_escrow.py:459
     // self._assert_admin()
     callsub _assert_admin
-    // contracts/staking_escrow.py:418
+    // contracts/staking_escrow.py:460
     // assert self.sprout_asa_id != 0, "not bootstrapped"  # M-A
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
     assert // not bootstrapped
-    // contracts/staking_escrow.py:419
+    // contracts/staking_escrow.py:461
     // itxn.KeyRegistration(fee=0).submit()
     itxn_begin
-    intc_2 // keyreg
+    intc_3 // keyreg
     itxn_field TypeEnum
     intc_0 // 0
     itxn_field Fee
     itxn_submit
-    // contracts/staking_escrow.py:420
+    // contracts/staking_escrow.py:462
     // self.is_online = UInt64(0)
     bytec 4 // "is_online"
     intc_0 // 0
     app_global_put
-    // contracts/staking_escrow.py:414
+    // contracts/staking_escrow.py:456
     // @abimethod()
     intc_1 // 1
     return
@@ -935,13 +1025,13 @@ go_offline:
 
 // staking_escrow.StakingEscrow.discard_unbootstrapped[routing]() -> void:
 discard_unbootstrapped:
-    // contracts/staking_escrow.py:442
+    // contracts/staking_escrow.py:484
     // assert Txn.sender == Global.creator_address, "creator only"
     txn Sender
     global CreatorAddress
     ==
     assert // creator only
-    // contracts/staking_escrow.py:443
+    // contracts/staking_escrow.py:485
     // assert self.sprout_asa_id == 0, "already bootstrapped: use admin_close"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
@@ -949,7 +1039,7 @@ discard_unbootstrapped:
     assert // check self.sprout_asa_id exists
     !
     assert // already bootstrapped: use admin_close
-    // contracts/staking_escrow.py:445-451
+    // contracts/staking_escrow.py:487-493
     // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     //     receiver=Global.creator_address,
@@ -958,28 +1048,28 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:447
+    // contracts/staking_escrow.py:489
     // receiver=Global.creator_address,
     global CreatorAddress
-    // contracts/staking_escrow.py:449
+    // contracts/staking_escrow.py:491
     // close_remainder_to=Global.creator_address,
     dup
     itxn_field CloseRemainderTo
-    // contracts/staking_escrow.py:448
+    // contracts/staking_escrow.py:490
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // contracts/staking_escrow.py:445-446
+    // contracts/staking_escrow.py:487-488
     // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:450
+    // contracts/staking_escrow.py:492
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:445-451
+    // contracts/staking_escrow.py:487-493
     // # Return any stray ALGO in the app account to the creator and zero it.
     // itxn.Payment(
     //     receiver=Global.creator_address,
@@ -988,7 +1078,7 @@ discard_unbootstrapped:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:426
+    // contracts/staking_escrow.py:468
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -996,24 +1086,24 @@ discard_unbootstrapped:
 
 // staking_escrow.StakingEscrow.admin_close[routing]() -> void:
 admin_close:
-    // contracts/staking_escrow.py:470
+    // contracts/staking_escrow.py:512
     // self._assert_admin()
     callsub _assert_admin
-    // contracts/staking_escrow.py:471
+    // contracts/staking_escrow.py:513
     // assert self.sprout_asa_id != 0, "not bootstrapped"
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
     assert // not bootstrapped
-    // contracts/staking_escrow.py:473-475
+    // contracts/staking_escrow.py:515-517
     // # SAFETY GATE: all Sprout must be back in the contract (principal fully
     // # redeemed). Equivalent to sprout_held == SUPPLY_BASE.
     // assert self._accounted_principal() == 0, "principal outstanding: depositors still owed"
     callsub _accounted_principal
     !
     assert // principal outstanding: depositors still owed
-    // contracts/staking_escrow.py:477-479
+    // contracts/staking_escrow.py:519-521
     // # Must be OFFLINE before closing — never tear down an account that is still
     // # registered for consensus.
     // assert self.is_online == 0, "go offline before closing"
@@ -1023,7 +1113,7 @@ admin_close:
     assert // check self.is_online exists
     !
     assert // go offline before closing
-    // contracts/staking_escrow.py:481-491
+    // contracts/staking_escrow.py:523-533
     // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
     // # supply (guaranteed by principal == 0 above), so this destroy is authorized
     // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
@@ -1036,14 +1126,14 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:489
+    // contracts/staking_escrow.py:531
     // config_asset=self.sprout_asa_id,
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
     itxn_field ConfigAsset
-    // contracts/staking_escrow.py:481-488
+    // contracts/staking_escrow.py:523-530
     // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
     // # supply (guaranteed by principal == 0 above), so this destroy is authorized
     // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
@@ -1054,11 +1144,11 @@ admin_close:
     // itxn.AssetConfig(
     pushint 3 // acfg
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:490
+    // contracts/staking_escrow.py:532
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:481-491
+    // contracts/staking_escrow.py:523-533
     // # 1) Destroy the Sprout ASA. The app is the ASA MANAGER and holds 100% of
     // # supply (guaranteed by principal == 0 above), so this destroy is authorized
     // # and valid. Destroying it is what lets the CREATOR account (the app) shed the
@@ -1071,7 +1161,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:493-501
+    // contracts/staking_escrow.py:535-543
     // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
     // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
     // # to the admin in one step.
@@ -1082,7 +1172,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_begin
-    // contracts/staking_escrow.py:497
+    // contracts/staking_escrow.py:539
     // receiver=self.admin,
     intc_0 // 0
     bytec_2 // "admin"
@@ -1090,23 +1180,23 @@ admin_close:
     assert // check self.admin exists
     dup
     itxn_field CloseRemainderTo
-    // contracts/staking_escrow.py:498
+    // contracts/staking_escrow.py:540
     // amount=0,
     intc_0 // 0
     itxn_field Amount
     itxn_field Receiver
-    // contracts/staking_escrow.py:493-496
+    // contracts/staking_escrow.py:535-538
     // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
     // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
     // # to the admin in one step.
     // itxn.Payment(
     intc_1 // pay
     itxn_field TypeEnum
-    // contracts/staking_escrow.py:500
+    // contracts/staking_escrow.py:542
     // fee=0,
     intc_0 // 0
     itxn_field Fee
-    // contracts/staking_escrow.py:493-501
+    // contracts/staking_escrow.py:535-543
     // # 2) Close the app account: send ALL remaining ALGO to admin and zero the
     // # account. amount=0 + close_remainder_to moves the entire balance (less fee)
     // # to the admin in one step.
@@ -1117,7 +1207,7 @@ admin_close:
     //     fee=0,
     // ).submit()
     itxn_submit
-    // contracts/staking_escrow.py:453
+    // contracts/staking_escrow.py:495
     // @abimethod(allow_actions=["DeleteApplication"])
     intc_1 // 1
     return
@@ -1125,10 +1215,10 @@ admin_close:
 
 // staking_escrow.StakingEscrow.get_principal[routing]() -> void:
 get_principal:
-    // contracts/staking_escrow.py:517
+    // contracts/staking_escrow.py:559
     // return self._accounted_principal()
     callsub _accounted_principal
-    // contracts/staking_escrow.py:515
+    // contracts/staking_escrow.py:557
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -1141,7 +1231,7 @@ get_principal:
 
 // staking_escrow.StakingEscrow.get_surplus[routing]() -> void:
 get_surplus:
-    // contracts/staking_escrow.py:521-523
+    // contracts/staking_escrow.py:563-565
     // # Mirrors harvest's floor exactly (principal + mbr + buffer) so the UI
     // # never shows harvestable surplus that harvest would refuse.
     // app_bal = Global.current_application_address.balance
@@ -1151,22 +1241,22 @@ get_surplus:
     dup
     uncover 2
     assert // account funded
-    // contracts/staking_escrow.py:524
+    // contracts/staking_escrow.py:566
     // floor = self._harvest_floor()
     callsub _harvest_floor
     dup
     cover 2
-    // contracts/staking_escrow.py:525
+    // contracts/staking_escrow.py:567
     // if app_bal <= floor:
     <=
     bz get_surplus_after_if_else@3
     popn 2
-    // contracts/staking_escrow.py:526
+    // contracts/staking_escrow.py:568
     // return UInt64(0)
     intc_0 // 0
 
 get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4:
-    // contracts/staking_escrow.py:519
+    // contracts/staking_escrow.py:561
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -1177,24 +1267,24 @@ get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4:
     return
 
 get_surplus_after_if_else@3:
-    // contracts/staking_escrow.py:527
+    // contracts/staking_escrow.py:569
     // return app_bal - floor
     -
-    // contracts/staking_escrow.py:519
+    // contracts/staking_escrow.py:561
     // @abimethod(readonly=True)
     b get_surplus_after_inlined_staking_escrow.StakingEscrow.get_surplus@4
 
 
 // staking_escrow.StakingEscrow.get_state[routing]() -> void:
 get_state:
-    // contracts/staking_escrow.py:531-532
+    // contracts/staking_escrow.py:573-574
     // # Returns sprout_asa_id for convenience (0 if not bootstrapped).
     // return self.sprout_asa_id
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // contracts/staking_escrow.py:529
+    // contracts/staking_escrow.py:571
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -1207,14 +1297,14 @@ get_state:
 
 // staking_escrow.StakingEscrow.get_total_admin_fee[routing]() -> void:
 get_total_admin_fee:
-    // contracts/staking_escrow.py:543-544
+    // contracts/staking_escrow.py:585-586
     // # Lifetime microAlgo paid to the admin as the harvest fee (telemetry).
     // return self.total_admin_fee
     intc_0 // 0
     bytec 5 // "total_admin_fee"
     app_global_get_ex
     assert // check self.total_admin_fee exists
-    // contracts/staking_escrow.py:541
+    // contracts/staking_escrow.py:583
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -1227,7 +1317,7 @@ get_total_admin_fee:
 
 // staking_escrow.StakingEscrow.preview_harvest_split[routing]() -> void:
 preview_harvest_split:
-    // contracts/staking_escrow.py:548-551
+    // contracts/staking_escrow.py:590-593
     // # The admin cut the NEXT harvest would pay at the current balance, so the UI
     // # can show "admin fee / pool" before anyone triggers the sweep. Mirrors
     // # harvest's math exactly. Returns 0 when there is no surplus.
@@ -1238,22 +1328,22 @@ preview_harvest_split:
     dup
     uncover 2
     assert // account funded
-    // contracts/staking_escrow.py:552
+    // contracts/staking_escrow.py:594
     // floor = self._harvest_floor()
     callsub _harvest_floor
     dup
     cover 2
-    // contracts/staking_escrow.py:553
+    // contracts/staking_escrow.py:595
     // if app_bal <= floor:
     <=
     bz preview_harvest_split_after_if_else@3
     popn 2
-    // contracts/staking_escrow.py:554
+    // contracts/staking_escrow.py:596
     // return UInt64(0)
     intc_0 // 0
 
 preview_harvest_split_after_inlined_staking_escrow.StakingEscrow.preview_harvest_split@4:
-    // contracts/staking_escrow.py:546
+    // contracts/staking_escrow.py:588
     // @abimethod(readonly=True)
     itob
     bytec_1 // 0x151f7c75
@@ -1264,23 +1354,23 @@ preview_harvest_split_after_inlined_staking_escrow.StakingEscrow.preview_harvest
     return
 
 preview_harvest_split_after_if_else@3:
-    // contracts/staking_escrow.py:555
+    // contracts/staking_escrow.py:597
     // surplus = app_bal - floor
     -
-    // contracts/staking_escrow.py:556
+    // contracts/staking_escrow.py:598
     // return (surplus * ADMIN_FEE_BPS) // BPS_DENOM
     pushint 1000
     *
     pushint 10000
     /
-    // contracts/staking_escrow.py:546
+    // contracts/staking_escrow.py:588
     // @abimethod(readonly=True)
     b preview_harvest_split_after_inlined_staking_escrow.StakingEscrow.preview_harvest_split@4
 
 
 // staking_escrow.StakingEscrow._accounted_principal() -> uint64:
 _accounted_principal:
-    // contracts/staking_escrow.py:106-111
+    // contracts/staking_escrow.py:115-120
     // # Balance of the app's own holding of the Sprout ASA.
     // # No opt-in assertion: the escrow is the ASA CREATOR, so bootstrap's
     // # AssetConfig lands the full supply in the app account and opts it in
@@ -1288,13 +1378,13 @@ _accounted_principal:
     // # Sprout but is not opted in, so a check here would be dead code.
     // return self._sprout().balance(Global.current_application_address)
     global CurrentApplicationAddress
-    // contracts/staking_escrow.py:102
+    // contracts/staking_escrow.py:111
     // return Asset(self.sprout_asa_id)
     intc_0 // 0
     bytec_0 // "sprout_asa_id"
     app_global_get_ex
     assert // check self.sprout_asa_id exists
-    // contracts/staking_escrow.py:106-111
+    // contracts/staking_escrow.py:115-120
     // # Balance of the app's own holding of the Sprout ASA.
     // # No opt-in assertion: the escrow is the ASA CREATOR, so bootstrap's
     // # AssetConfig lands the full supply in the app account and opts it in
@@ -1303,7 +1393,7 @@ _accounted_principal:
     // return self._sprout().balance(Global.current_application_address)
     asset_holding_get AssetBalance
     assert // account opted into asset
-    // contracts/staking_escrow.py:115-117
+    // contracts/staking_escrow.py:124-126
     // # The ALGO principal contributors can still reclaim.
     // # = total supply minus whatever Sprout the contract still holds.
     // return SUPPLY_BASE - self._sprout_held()
@@ -1315,20 +1405,20 @@ _accounted_principal:
 
 // staking_escrow.StakingEscrow._harvest_floor() -> uint64:
 _harvest_floor:
-    // contracts/staking_escrow.py:134-137
+    // contracts/staking_escrow.py:143-146
     // # Single source of truth for the line harvest must never cross.
     // # Everything below this stays in the escrow: principal (owed to depositors),
     // # the live MBR (so the account keeps functioning), and the C1 buffer.
     // return self._accounted_principal() + self._live_mbr() + HARVEST_BUFFER
     callsub _accounted_principal
-    // contracts/staking_escrow.py:121-123
+    // contracts/staking_escrow.py:130-132
     // # Live minimum balance of the app account (base + per-ASA + any boxes).
     // # Read from the ledger, NEVER hardcoded, so a protocol MBR change can't strand funds.
     // return Global.current_application_address.min_balance
     global CurrentApplicationAddress
     acct_params_get AcctMinBalance
     assert // account funded
-    // contracts/staking_escrow.py:134-137
+    // contracts/staking_escrow.py:143-146
     // # Single source of truth for the line harvest must never cross.
     // # Everything below this stays in the escrow: principal (owed to depositors),
     // # the live MBR (so the account keeps functioning), and the C1 buffer.
@@ -1341,7 +1431,7 @@ _harvest_floor:
 
 // staking_escrow.StakingEscrow._assert_admin() -> void:
 _assert_admin:
-    // contracts/staking_escrow.py:141
+    // contracts/staking_escrow.py:150
     // assert Txn.sender == self.admin, "admin only"
     txn Sender
     intc_0 // 0

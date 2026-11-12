@@ -199,19 +199,17 @@ function b64KeyToBytes(b64) {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0))
 }
 
-// Mainnet GoOnlineFee (Payouts.GoOnlineFee) = 2 ALGO. An online keyreg that carries
-// at least this fee sets the account IncentiveEligible bit (a prerequisite for earning
-// staking rewards, alongside a 30k–70M ALGO balance). The escrow's inner keyreg is
-// fee=0, so to cover the keyreg at this level the OUTER go_online app call must pool
-// enough fee: GO_ONLINE_FEE for the inner keyreg + the app call's own min fee.
+// Mainnet GoOnlineFee (Payouts.GoOnlineFee) = 2 ALGO. Eligibility requires this fee on
+// the KEYREG's OWN fee field (pooling does not count), so the contract sets the inner
+// keyreg's fee to GO_ONLINE_FEE and the admin funds it via a grouped payment that tops
+// the escrow up by exactly that amount — never from pooled staker principal.
 const GO_ONLINE_FEE = 2_000_000
-const MIN_TXN_FEE    = 1_000
 
 export async function goOnline({
-  signTransactions, address,            // address = the ADMIN wallet (signer)
+  signTransactions, address,            // address = the ADMIN wallet (signer + fee funder)
   voteKey, selectionKey, stateProofKey, // base64 strings from the generated partkey
   voteFirst, voteLast, voteKeyDilution, // round window + dilution (numbers)
-  incentiveEligible = false,            // true → pool the 2 ALGO GoOnlineFee for eligibility
+  incentiveEligible = false,            // true → pay the 2 ALGO GoOnlineFee for eligibility
 }) {
   const vote = b64KeyToBytes(voteKey)
   const sel  = b64KeyToBytes(selectionKey)
@@ -220,23 +218,34 @@ export async function goOnline({
   if (sel.length !== 32)  throw new Error(`selection key must be 32 bytes, got ${sel.length}`)
   if (sp.length !== 64)   throw new Error(`state-proof key must be 64 bytes, got ${sp.length}`)
 
-  // Fee on the OUTER app call. With incentiveEligible, pool GoOnlineFee + the app call's
-  // own min fee so the inner keyreg is funded to the 2 ALGO eligibility level via fee
-  // pooling. The ADMIN wallet (the signer) pays this fee out of pocket — it never comes
-  // from pooled staker ALGO, so the principal-safety invariant is untouched. Without
-  // the flag, the old 2000 (app call + inner keyreg at min fee) registers plain-online.
-  const outerFee = incentiveEligible ? (GO_ONLINE_FEE + MIN_TXN_FEE) : 2_000
+  const eligible = incentiveEligible ? 1 : 0
+  const feeAmount = eligible ? GO_ONLINE_FEE : 0
+  const escrowAddr = appAddr()
 
+  // Group member 1: the ADMIN-funded fee payment. Tops the escrow up by exactly the
+  // keyreg fee, so the inner keyreg can pay GO_ONLINE_FEE without drawing on principal.
+  // (A 0-amount payment for a plain registration is a harmless no-op placeholder that
+  // satisfies the method's pay argument.)
+  const payFee = await getSp()
+  const feePay = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+    sender: address, receiver: escrowAddr, amount: feeAmount, suggestedParams: payFee,
+  })
+
+  // Group member 2: the app call. The inner keyreg sets its OWN fee (GO_ONLINE_FEE when
+  // eligible), which is paid from the escrow's balance — topped up by the fee payment
+  // above — NOT pooled from this call. So the app call only needs its own min fee.
   const m = method('go_online')
-  // go_online(vote_pk: bytes, sel_pk: bytes, sp_pk: bytes, vote_first, vote_last, vote_kd)
-  const appArgs = buildAppArgs(m, [vote, sel, sp, BigInt(voteFirst), BigInt(voteLast), BigInt(voteKeyDilution)])
+  // go_online(fee_pay, vote_pk, sel_pk, sp_pk, vote_first, vote_last, vote_kd, incentive_eligible)
+  const appArgs = buildAppArgs(m, [vote, sel, sp, BigInt(voteFirst), BigInt(voteLast), BigInt(voteKeyDilution), BigInt(eligible)])
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address,
-    suggestedParams: await getSp(outerFee),
+    suggestedParams: await getSp(1_000),
     appIndex: ESCROW_APP_ID,
     appArgs,
   })
-  return signSend(signTransactions, [appCall], appCall.txID())
+
+  algosdk.assignGroupID([feePay, appCall])
+  return signSend(signTransactions, [feePay, appCall], appCall.txID())
 }
 
 export async function goOffline({ signTransactions, address }) {
