@@ -63,49 +63,43 @@ export default function Landing() {
     return () => { cancelled = true }
   }, [])
 
+  // The single featured card shown beside the hero (matches the Campaigns page, which
+  // shows one). Extra featured campaigns are reachable via "All campaigns".
+  const heroFeatured = featured[0] ?? null
+
   return (
     <>
-      {/* Hero */}
+      {/* Hero — two columns (text + status | featured card) when a campaign is featured,
+          exactly like the Campaigns page; single column otherwise so the text isn't left
+          half-width. hero-grid collapses to one column on mobile. */}
       <section className="hero wrap">
-        <div style={{ maxWidth: 680 }}>
-          <h1 style={{ fontSize: 'clamp(40px, 5.4vw, 64px)', lineHeight: 1.05, margin: 0 }}>
-            Algorand's own — <span className="accent" style={{ color: 'var(--accent)', fontStyle: 'italic' }}>grassroots</span> funding platform
-          </h1>
-          <p className="hero-sub" style={{ maxWidth: 540 }}>
-            Back projects you believe in. Stake ALGO to grow a shared prize pool, nominate
-            and vote to direct it, or launch and back individual campaigns. All
-            non-custodial, on mainnet.
-          </p>
-        </div>
+        <div className={heroFeatured ? 'hero-grid' : undefined}>
+          <div style={heroFeatured ? undefined : { maxWidth: 680 }}>
+            <h1 style={{ fontSize: 'clamp(40px, 5.4vw, 64px)', lineHeight: 1.05, margin: 0 }}>
+              Algorand's own — <span className="accent" style={{ color: 'var(--accent)', fontStyle: 'italic' }}>grassroots</span> funding platform
+            </h1>
+            <p className="hero-sub" style={{ maxWidth: 540 }}>
+              Back projects you believe in. Stake ALGO to grow a shared prize pool, nominate
+              and vote to direct it, or launch and back individual campaigns. All
+              non-custodial, on mainnet.
+            </p>
 
-        {/* Live cycle status — the pulse */}
-        <div style={{ marginTop: 32, maxWidth: 680 }}>
-          <CycleStatus variant="hero" />
-        </div>
-      </section>
-
-      {/* Featured campaign(s) — same cards as the Campaigns page. Hidden entirely when
-          nothing is featured. */}
-      {featured.length > 0 && (
-        <section className="wrap" style={{ paddingBottom: 24 }}>
-          <div style={{ maxWidth: 680 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <span className="eyebrow">Featured</span>
-              <Link to="/campaigns" style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                All campaigns →
-              </Link>
-            </div>
-            <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-              {featured.map(p => (
-                <div key={p.id} className="hero-featured" style={{ position: 'relative' }}>
-                  <span className="featured-flag">Featured</span>
-                  <ProjectCard project={p} currentRound={currentRound} />
-                </div>
-              ))}
+            {/* Live cycle status — the pulse */}
+            <div style={{ marginTop: 32 }}>
+              <CycleStatus variant="hero" />
             </div>
           </div>
-        </section>
-      )}
+
+          {/* Featured campaign — same card + flag as the Campaigns page. Only rendered
+              when a campaign is featured; otherwise the hero is single-column. */}
+          {heroFeatured && (
+            <div className="hero-featured">
+              <span className="featured-flag">Featured</span>
+              <ProjectCard project={heroFeatured} currentRound={currentRound} />
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Two paths — capped to the same 680px column as the hero/status above so the
           left and right edges line up with the status box. */}
