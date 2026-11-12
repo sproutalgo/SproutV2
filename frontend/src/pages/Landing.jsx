@@ -1,13 +1,68 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CycleStatus from '../components/CycleStatus'
 import { Icon } from '../components/UI'
+import ProjectCard from '../components/ProjectCard'
+import { fetchPublicProjects } from '../utils/api'
+import { algodClient, fetchOnChainBatch, gsFromCache } from '../utils/algorand'
 
 // The orientation landing page. Its job is to tell a visitor in seconds what Sprout is,
-// show where the funding cycle stands, and route to one of two products — the funding
-// engine or crowdfunding. Not a marketing wall; a router with a pulse. Uses the existing
-// design-system classes throughout so it matches the site aesthetic.
+// show where the funding cycle stands, surface the featured campaign(s), and route to one
+// of two products — the funding engine or crowdfunding. Not a marketing wall; a router
+// with a pulse. Uses the existing design-system classes throughout so it matches the site
+// aesthetic.
 export default function Landing() {
+  // Featured campaigns — fetched + merged with on-chain state exactly like the Campaigns
+  // page (Home.jsx) so the cards render identically. Falls back to nothing if none are
+  // featured, so the section just doesn't appear rather than leaving an empty slot.
+  const [featured, setFeatured] = useState([])
+  const [currentRound, setCurrentRound] = useState(0)
+
+  useEffect(() => {
+    algodClient.status().do()
+      .then(s => setCurrentRound(Number(s['last-round'] ?? s.lastRound ?? 0)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const result = await fetchPublicProjects({ page: 1, pageSize: 50 })
+        const metaList = Array.isArray(result.projects) ? result.projects : (Array.isArray(result) ? result : [])
+        // Only the featured rows need on-chain data for the card.
+        const featuredMetas = metaList
+          .filter(m => m.is_featured)
+          .sort((a, b) => (a.feature_order ?? 0) - (b.feature_order ?? 0))
+          .slice(0, 3)
+        if (featuredMetas.length === 0) { if (!cancelled) setFeatured([]); return }
+
+        // Merge cached on-chain columns where present; fetch algod for the rest — same
+        // strategy as Home.jsx, scoped to just the featured set.
+        const cachedMap = {}
+        const uncachedIds = []
+        for (const meta of featuredMetas) {
+          const id = Number(meta.app_id)
+          if (meta.on_chain_deleted) { cachedMap[id] = { gs: {}, deleted: true }; continue }
+          const cached = gsFromCache(meta)
+          if (cached) cachedMap[id] = { gs: cached, deleted: false }
+          else uncachedIds.push(id)
+        }
+        const algodResults = uncachedIds.length > 0 ? await fetchOnChainBatch(uncachedIds) : {}
+        const merged = featuredMetas.map(meta => {
+          const id = Number(meta.app_id)
+          const { gs, deleted } = cachedMap[id] ?? algodResults[id] ?? { gs: {}, deleted: true }
+          return { id, gs, meta, deleted }
+        })
+        if (!cancelled) setFeatured(merged)
+      } catch {
+        if (!cancelled) setFeatured([])
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
   return (
     <>
       {/* Hero */}
@@ -28,6 +83,29 @@ export default function Landing() {
           <CycleStatus variant="hero" />
         </div>
       </section>
+
+      {/* Featured campaign(s) — same cards as the Campaigns page. Hidden entirely when
+          nothing is featured. */}
+      {featured.length > 0 && (
+        <section className="wrap" style={{ paddingBottom: 24 }}>
+          <div style={{ maxWidth: 680 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span className="eyebrow">Featured</span>
+              <Link to="/campaigns" style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                All campaigns →
+              </Link>
+            </div>
+            <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+              {featured.map(p => (
+                <div key={p.id} className="hero-featured" style={{ position: 'relative' }}>
+                  <span className="featured-flag">Featured</span>
+                  <ProjectCard project={p} currentRound={currentRound} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Two paths — capped to the same 680px column as the hero/status above so the
           left and right edges line up with the status box. */}
