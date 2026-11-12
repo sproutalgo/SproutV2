@@ -5,10 +5,10 @@ import { useToast } from '../context/ToastContext'
 // Governance (Sprout) staking + voting:
 import {
   stake as stakeSprout, unstake as unstakeSprout, vote,
-  fetchStaked, fetchPool, listCandidateIds, fetchCandidateWeight,
+  fetchStaked, listCandidateIds, fetchCandidateWeight,
 } from '../utils/governanceChain'
 // Escrow (ALGO) pool staking:
-import { deposit as depositAlgo, withdraw as withdrawAlgo, fetchMyPosition } from '../utils/stakingChain'
+import { deposit as depositAlgo, withdraw as withdrawAlgo, fetchMyPosition, fetchEscrowStats } from '../utils/stakingChain'
 import { fetchDirectory } from '../utils/api'
 import { fetchCycleStatus } from '../utils/cycleStatus'
 import { fmtAlgo } from '../components/UI'
@@ -27,7 +27,8 @@ export default function Participate() {
   const { addToast } = useToast()
 
   const [status, setStatus] = useState(null)
-  const [poolMicro, setPoolMicro] = useState(0)
+  // Total ALGO staked across ALL accounts in the escrow (= the escrow's principal).
+  const [totalStakedMicro, setTotalStakedMicro] = useState(0)
 
   // ALGO (escrow) position. Depositing ALGO returns Sprout 1:1 as the principal receipt;
   // withdrawing returns that ALGO for the Sprout. So the user's pooled ALGO == their
@@ -52,16 +53,16 @@ export default function Participate() {
 
   const reload = useCallback(async () => {
     try {
-      const [s, pool, sp, algo, dir, ids] = await Promise.all([
+      const [s, sp, algo, dir, ids, escrowStats] = await Promise.all([
         fetchCycleStatus(),
-        fetchPool().catch(() => 0),
         activeAddress ? fetchStaked(activeAddress).catch(() => null) : Promise.resolve(null),
         activeAddress ? fetchMyPosition(activeAddress).catch(() => null) : Promise.resolve(null),
         fetchDirectory({ page: 1, pageSize: 200 }).then(r => r.entries || []).catch(() => []),
         listCandidateIds().catch(() => []),
+        fetchEscrowStats().catch(() => null),
       ])
       setStatus(s)
-      setPoolMicro(Number(pool) || 0)
+      setTotalStakedMicro(Number(escrowStats?.principalMicro) || 0)
       setSprout(sp)
       setAlgoPos(algo)
       setDirEntries(dir)
@@ -172,7 +173,7 @@ export default function Participate() {
             <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
               <div className="card" style={{ padding: 22, display: 'grid', gap: 14 }}>
                 <div className="stat"><span className="stat-val">{fmtAlgo(algoStakedMicro / MICRO)} ALGO</span><span className="stat-lbl">Your ALGO in the pool</span></div>
-                <div className="stat"><span className="stat-val" style={{ fontSize: 20 }}>{fmtAlgo(poolMicro / MICRO)} ALGO</span><span className="stat-lbl">Total prize pool</span></div>
+                <div className="stat"><span className="stat-val" style={{ fontSize: 20 }}>{fmtAlgo(totalStakedMicro / MICRO)} ALGO</span><span className="stat-lbl">Total ALGO staked (all accounts)</span></div>
               </div>
               <div className="card" style={{ padding: 22, display: 'grid', gap: 12 }}>
                 <div className="field">
