@@ -1,4 +1,3 @@
-
 // EscrowBootstrap.jsx — admin-only page to deploy + bootstrap the Staking Escrow.
 //
 // Soft-gated by the obscure route AND by VITE_ADMIN_ADDRESS matching the connected
@@ -32,6 +31,7 @@ import {
   buildBootstrapTxn,
   closeEscrow,
 } from '../utils/escrowDeploy'
+import { goOnline, goOffline } from '../utils/stakingChain'
 
 // Where the compiled TEAL lives, relative to the site root.
 const APPROVAL_URL = '/contracts/escrow_approval.teal'
@@ -119,6 +119,17 @@ export default function EscrowBootstrap() {
   const [closeConfirm, setCloseConfirm] = useState('')
   const [closeStep, setCloseStep] = useState('')
   const [closing, setClosing] = useState(false)
+
+  // Consensus registration (keyreg) state — paste the partkey values generated on the
+  // node for the escrow address.
+  const [voteKey, setVoteKey] = useState('')
+  const [selKey, setSelKey] = useState('')
+  const [spKey, setSpKey] = useState('')
+  const [voteFirst, setVoteFirst] = useState('')
+  const [voteLast, setVoteLast] = useState('')
+  const [voteKd, setVoteKd] = useState('')
+  const [keyregStep, setKeyregStep] = useState('')
+  const [keyregBusy, setKeyregBusy] = useState(false)
 
   const isAdmin = activeAddress && ADMIN_ADDRESS && activeAddress === ADMIN_ADDRESS
 
@@ -278,6 +289,45 @@ export default function EscrowBootstrap() {
     }
   }
 
+  // ── Consensus: go online / offline ─────────────────────────────────────────
+  const canGoOnline =
+    isAdmin && !keyregBusy &&
+    voteKey.trim() && selKey.trim() && spKey.trim() &&
+    /^\d+$/.test(voteFirst) && /^\d+$/.test(voteLast) && /^\d+$/.test(voteKd)
+
+  async function doGoOnline() {
+    if (!canGoOnline) return
+    setKeyregBusy(true); setKeyregStep('Registering online (inner keyreg)…')
+    try {
+      await goOnline({
+        signTransactions, address: activeAddress,
+        voteKey: voteKey.trim(), selectionKey: selKey.trim(), stateProofKey: spKey.trim(),
+        voteFirst: Number(voteFirst), voteLast: Number(voteLast), voteKeyDilution: Number(voteKd),
+      })
+      setKeyregStep('Online. The account will start participating once the keys become valid.')
+      addToast('Escrow registered online for consensus', 'success', 8000)
+    } catch (e) {
+      const msg = e.message || String(e)
+      setKeyregStep(`Failed: ${msg}`)
+      addToast(msg, 'error', 10000)
+    } finally { setKeyregBusy(false) }
+  }
+
+  async function doGoOffline() {
+    if (!isAdmin || keyregBusy) return
+    if (!confirm('Take the escrow OFFLINE? It will stop earning consensus rewards until you register it online again.')) return
+    setKeyregBusy(true); setKeyregStep('Going offline…')
+    try {
+      await goOffline({ signTransactions, address: activeAddress })
+      setKeyregStep('Offline. The account is deregistered from consensus.')
+      addToast('Escrow taken offline', 'success', 8000)
+    } catch (e) {
+      const msg = e.message || String(e)
+      setKeyregStep(`Failed: ${msg}`)
+      addToast(msg, 'error', 10000)
+    } finally { setKeyregBusy(false) }
+  }
+
   if (!activeAddress) {
     return <section className="section wrap" style={{ maxWidth: 640 }}>
       <h1 style={{ fontSize: 24 }}>Escrow bootstrap</h1>
@@ -396,6 +446,64 @@ export default function EscrowBootstrap() {
         Both addresses are pinned permanently at bootstrap. Double-check them before running —
         there is no setter to change them afterward.
       </p>
+
+      {/* ── Consensus registration (keyreg) ─────────────────────────────── */}
+      <div className="card form-card" style={{ marginTop: 32 }}>
+        <div className="form-stack">
+          <div>
+            <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>Consensus registration</h2>
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
+              Register the escrow account online so it earns consensus rewards. Generate the
+              participation keys on your node for the escrow <em>app address</em>
+              (<code>goal account addpartkey -a &lt;escrow-addr&gt;</code>), then paste the three
+              keys (base64) plus the round window and key dilution. The escrow is a contract
+              account, so this registers via the contract's <code>go_online</code> — the admin
+              wallet signs it.
+            </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="vk">Vote key (base64, 32 bytes)</label>
+            <input id="vk" className="input" placeholder="eDfD…BDE=" value={voteKey} onChange={e => setVoteKey(e.target.value.trim())} />
+          </div>
+          <div className="field">
+            <label htmlFor="sk">Selection key (base64, 32 bytes)</label>
+            <input id="sk" className="input" placeholder="8oJW…wiA=" value={selKey} onChange={e => setSelKey(e.target.value.trim())} />
+          </div>
+          <div className="field">
+            <label htmlFor="spk">State-proof key (base64, 64 bytes — ends in <code>==</code>)</label>
+            <input id="spk" className="input" placeholder="zdws…7cYsg==" value={spKey} onChange={e => setSpKey(e.target.value.trim())} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div className="field">
+              <label htmlFor="vf">First valid</label>
+              <input id="vf" className="input" inputMode="numeric" placeholder="66896962" value={voteFirst} onChange={e => setVoteFirst(e.target.value.trim())} />
+            </div>
+            <div className="field">
+              <label htmlFor="vl">Last valid</label>
+              <input id="vl" className="input" inputMode="numeric" placeholder="69896962" value={voteLast} onChange={e => setVoteLast(e.target.value.trim())} />
+            </div>
+            <div className="field">
+              <label htmlFor="vkd">Key dilution</label>
+              <input id="vkd" className="input" inputMode="numeric" placeholder="1733" value={voteKd} onChange={e => setVoteKd(e.target.value.trim())} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" disabled={!canGoOnline} onClick={doGoOnline}>
+              {keyregBusy ? 'Working…' : 'Go online'}
+            </button>
+            <button className="btn btn-ghost" disabled={!isAdmin || keyregBusy} onClick={doGoOffline}>
+              Go offline
+            </button>
+          </div>
+          {keyregStep && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{keyregStep}</div>}
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+            The node that generated these keys must stay online and running, or the account is
+            marked absent. Going online does not change the account's minimum balance.
+          </p>
+        </div>
+      </div>
 
       {/* ── Close / recover ─────────────────────────────────────────────── */}
       <div className="card form-card" style={{ marginTop: 32, borderColor: 'var(--danger)' }}>

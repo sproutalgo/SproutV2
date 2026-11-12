@@ -181,6 +181,59 @@ export async function harvest({ signTransactions, address, poolAddress }) {
   return signSend(signTransactions, [appCall], appCall.txID())
 }
 
+// ─── Consensus participation — go_online / go_offline (admin) ─────────────────
+// The escrow is a contract account with no private key, so it can't sign a keyreg
+// itself. Registration happens through the contract: go_online issues the keyreg as
+// an INNER transaction. Generate the participation keys on a node for the ESCROW
+// APP ADDRESS (goal account addpartkey -a <appAddr> ...), then paste the three keys
+// (base64) + the round window + key dilution here. The admin wallet signs this call.
+//
+// The contract validates key lengths (vote/sel = 32 bytes, state-proof = 64) and the
+// round window, so a malformed key set reverts rather than registering a broken
+// online state.
+
+// Decode a base64 partkey string to bytes. goal/partkeyinfo prints these base64.
+function b64KeyToBytes(b64) {
+  const s = String(b64 || '').trim()
+  if (!s) throw new Error('empty key')
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0))
+}
+
+export async function goOnline({
+  signTransactions, address,            // address = the ADMIN wallet (signer)
+  voteKey, selectionKey, stateProofKey, // base64 strings from the generated partkey
+  voteFirst, voteLast, voteKeyDilution, // round window + dilution (numbers)
+}) {
+  const vote = b64KeyToBytes(voteKey)
+  const sel  = b64KeyToBytes(selectionKey)
+  const sp   = b64KeyToBytes(stateProofKey)
+  if (vote.length !== 32) throw new Error(`vote key must be 32 bytes, got ${vote.length}`)
+  if (sel.length !== 32)  throw new Error(`selection key must be 32 bytes, got ${sel.length}`)
+  if (sp.length !== 64)   throw new Error(`state-proof key must be 64 bytes, got ${sp.length}`)
+
+  const m = method('go_online')
+  // go_online(vote_pk: bytes, sel_pk: bytes, sp_pk: bytes, vote_first, vote_last, vote_kd)
+  const appArgs = buildAppArgs(m, [vote, sel, sp, BigInt(voteFirst), BigInt(voteLast), BigInt(voteKeyDilution)])
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address,
+    suggestedParams: await getSp(2000), // covers the inner KeyRegistration (fee:0)
+    appIndex: ESCROW_APP_ID,
+    appArgs,
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
+export async function goOffline({ signTransactions, address }) {
+  const m = method('go_offline')
+  const appCall = algosdk.makeApplicationNoOpTxnFromObject({
+    sender: address,
+    suggestedParams: await getSp(2000), // covers the inner (empty) KeyRegistration
+    appIndex: ESCROW_APP_ID,
+    appArgs: buildAppArgs(m, []),
+  })
+  return signSend(signTransactions, [appCall], appCall.txID())
+}
+
 // ─── Reads ──────────────────────────────────────────────────────────────────
 
 // The caller's Sprout balance == their withdrawable principal (1 Sprout = 1 microAlgo).
