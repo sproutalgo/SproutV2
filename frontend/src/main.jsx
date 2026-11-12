@@ -17,6 +17,10 @@ const walletManager = new WalletManager({
       id: WalletId.DEFLY,
       options: { projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID },
     },
+    {
+      id: WalletId.LUTE,
+      options: { siteName: 'Sprout' },
+    },
   ],
   network: NetworkId.MAINNET,
 })
