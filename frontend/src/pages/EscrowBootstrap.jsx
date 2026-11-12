@@ -128,6 +128,7 @@ export default function EscrowBootstrap() {
   const [voteFirst, setVoteFirst] = useState('')
   const [voteLast, setVoteLast] = useState('')
   const [voteKd, setVoteKd] = useState('')
+  const [incentiveEligible, setIncentiveEligible] = useState(false)
   const [keyregStep, setKeyregStep] = useState('')
   const [keyregBusy, setKeyregBusy] = useState(false)
 
@@ -303,6 +304,7 @@ export default function EscrowBootstrap() {
         signTransactions, address: activeAddress,
         voteKey: voteKey.trim(), selectionKey: selKey.trim(), stateProofKey: spKey.trim(),
         voteFirst: Number(voteFirst), voteLast: Number(voteLast), voteKeyDilution: Number(voteKd),
+        incentiveEligible,
       })
       setKeyregStep('Online. The account will start participating once the keys become valid.')
       addToast('Escrow registered online for consensus', 'success', 8000)
@@ -489,9 +491,18 @@ export default function EscrowBootstrap() {
             </div>
           </div>
 
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
+            <input type="checkbox" checked={incentiveEligible} onChange={e => setIncentiveEligible(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>
+              Register as <strong>incentive-eligible</strong> (pays the 2 ALGO GoOnlineFee from
+              the admin wallet). Only needed to earn staking rewards, which also requires the
+              pool to hold ≥ 30,000 ALGO — leave unchecked for plain consensus participation.
+            </span>
+          </label>
+
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" disabled={!canGoOnline} onClick={doGoOnline}>
-              {keyregBusy ? 'Working…' : 'Go online'}
+              {keyregBusy ? 'Working…' : incentiveEligible ? 'Go online (eligible, 2 ALGO fee)' : 'Go online'}
             </button>
             <button className="btn btn-ghost" disabled={!isAdmin || keyregBusy} onClick={doGoOffline}>
               Go offline

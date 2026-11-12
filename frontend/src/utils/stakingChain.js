@@ -199,10 +199,19 @@ function b64KeyToBytes(b64) {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0))
 }
 
+// Mainnet GoOnlineFee (Payouts.GoOnlineFee) = 2 ALGO. An online keyreg that carries
+// at least this fee sets the account IncentiveEligible bit (a prerequisite for earning
+// staking rewards, alongside a 30k–70M ALGO balance). The escrow's inner keyreg is
+// fee=0, so to cover the keyreg at this level the OUTER go_online app call must pool
+// enough fee: GO_ONLINE_FEE for the inner keyreg + the app call's own min fee.
+const GO_ONLINE_FEE = 2_000_000
+const MIN_TXN_FEE    = 1_000
+
 export async function goOnline({
   signTransactions, address,            // address = the ADMIN wallet (signer)
   voteKey, selectionKey, stateProofKey, // base64 strings from the generated partkey
   voteFirst, voteLast, voteKeyDilution, // round window + dilution (numbers)
+  incentiveEligible = false,            // true → pool the 2 ALGO GoOnlineFee for eligibility
 }) {
   const vote = b64KeyToBytes(voteKey)
   const sel  = b64KeyToBytes(selectionKey)
@@ -211,12 +220,19 @@ export async function goOnline({
   if (sel.length !== 32)  throw new Error(`selection key must be 32 bytes, got ${sel.length}`)
   if (sp.length !== 64)   throw new Error(`state-proof key must be 64 bytes, got ${sp.length}`)
 
+  // Fee on the OUTER app call. With incentiveEligible, pool GoOnlineFee + the app call's
+  // own min fee so the inner keyreg is funded to the 2 ALGO eligibility level via fee
+  // pooling. The ADMIN wallet (the signer) pays this fee out of pocket — it never comes
+  // from pooled staker ALGO, so the principal-safety invariant is untouched. Without
+  // the flag, the old 2000 (app call + inner keyreg at min fee) registers plain-online.
+  const outerFee = incentiveEligible ? (GO_ONLINE_FEE + MIN_TXN_FEE) : 2_000
+
   const m = method('go_online')
   // go_online(vote_pk: bytes, sel_pk: bytes, sp_pk: bytes, vote_first, vote_last, vote_kd)
   const appArgs = buildAppArgs(m, [vote, sel, sp, BigInt(voteFirst), BigInt(voteLast), BigInt(voteKeyDilution)])
   const appCall = algosdk.makeApplicationNoOpTxnFromObject({
     sender: address,
-    suggestedParams: await getSp(2000), // covers the inner KeyRegistration (fee:0)
+    suggestedParams: await getSp(outerFee),
     appIndex: ESCROW_APP_ID,
     appArgs,
   })
