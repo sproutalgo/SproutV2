@@ -9,8 +9,7 @@
 # Safety model (see the design spec): accounted_principal is DERIVED from the
 # token supply, never stored. Because the only lever that moves sprout_held is the
 # 1:1 deposit/withdraw transfer, the principal figure cannot drift from real ALGO
-# principal. This structurally eliminates the mint/burn asymmetry that produced
-# three High-severity findings in Folks Finance xALGO.
+# principal. 
 #
 # Invariants enforced here:
 #   I3  deposit moves ALGO in and Sprout out by the SAME amount
@@ -47,7 +46,16 @@ SUPPLY_BASE = 10_000_000_000_000_000
 # balance". A manual admin top-up would be swept by the next harvest; this buffer
 # sits below the harvest floor, so it is permanent.
 HARVEST_BUFFER = 1_000_000
- 
+
+# Monetization: the admin fee taken from HARVESTED REWARD SURPLUS ONLY (never from
+# principal, MBR, or the C1 buffer — those sit below the harvest floor and are never
+# touched). Expressed in basis points of the surplus. 1000 bps = 10%. The remaining
+# 90% goes to the funding pool. Integer-floor the admin cut and give the remainder to
+# the pool, so no microAlgo is ever stranded by rounding. This funds platform upkeep;
+# it is applied at the sweep, so it is transparent and verifiable on-chain.
+ADMIN_FEE_BPS = 1_000          # 10.00%
+BPS_DENOM = 10_000
+
 # M2: Algorand participation-key byte lengths (ed25519 vote/selection = 32,
 # state-proof key = 64). A malformed key would register the account online with
 # keys it cannot actually sign blocks with — silently forfeiting rewards and risking
@@ -77,8 +85,10 @@ class StakingEscrow(ARC4Contract):
         self.admin = Account()
         # 0/1 consensus registration state (telemetry; keyreg itself is the source of truth).
         self.is_online = UInt64(0)
-        # Lifetime microAlgo swept to the pool (telemetry only).
+        # Lifetime microAlgo swept out as rewards (admin fee + pool), telemetry only.
         self.total_harvested = UInt64(0)
+        # Lifetime microAlgo paid to the admin as the harvest fee (telemetry only).
+        self.total_admin_fee = UInt64(0)
         # Deposit circuit breaker. Withdraw is NEVER gated by this.
         self.paused = UInt64(0)
  
@@ -300,16 +310,21 @@ class StakingEscrow(ARC4Contract):
  
     @abimethod()
     def harvest(self) -> UInt64:
-        """Sweep (balance - principal - live_mbr - buffer) to the funding pool.
- 
+        """Sweep (balance - principal - live_mbr - buffer), split 10% admin / 90% pool.
+
         Permissionless: rewards arrive silently as balance increases with no event,
-        so anyone may trigger the sweep. Caller pays the inner-txn fee. Returns the
-        swept amount.
+        so anyone may trigger the sweep. Caller pays the inner-txn fees (now up to TWO
+        inner payments). Returns the TOTAL swept (admin fee + pool), matching the
+        amount by which the account balance drops.
+
+        The split is applied to the SURPLUS ONLY. principal, the live MBR, and the C1
+        buffer all sit below the harvest floor and are never part of `surplus`, so the
+        fee can never come out of depositor principal — I5/I6 hold exactly as before.
         """
         assert self.funding_pool_addr != Global.zero_address, "pool unset"
- 
+
         app_bal = Global.current_application_address.balance
- 
+
         # I5/I6 + C1: the account must cover principal + MBR + buffer before we
         # sweep anything. Checked subtraction — revert rather than ever touch
         # principal (the fix the Folks reports all lacked), and keep the buffer in
@@ -318,13 +333,33 @@ class StakingEscrow(ARC4Contract):
         assert app_bal >= floor, "no surplus: balance below principal+mbr+buffer"
         surplus = app_bal - floor
         assert surplus > 0, "nothing to harvest"
- 
+
+        # Split the surplus: admin fee is floor(surplus * bps / 10000); the pool gets
+        # the exact remainder (surplus - admin_cut), so rounding dust always favors the
+        # pool and no microAlgo is ever stranded. Multiplication is bounded by the
+        # account balance, well within UInt64, so this cannot overflow in practice.
+        admin_cut = (surplus * ADMIN_FEE_BPS) // BPS_DENOM
+        pool_amt = surplus - admin_cut
+
+        # Admin fee payment — only emitted when it rounds to a nonzero amount, so a
+        # dust-sized harvest (where admin_cut floors to 0) never attempts a zero
+        # payment. When admin_cut == 0 the pool simply receives the whole surplus.
+        if admin_cut > 0:
+            itxn.Payment(
+                receiver=self.admin,
+                amount=admin_cut,
+                fee=0,
+            ).submit()
+            self.total_admin_fee += admin_cut
+
+        # Pool payment — pool_amt is always > 0 here (admin_cut < surplus whenever the
+        # fee is under 100%), so this inner payment never has a zero amount.
         itxn.Payment(
             receiver=self._pool_addr(),
-            amount=surplus,
+            amount=pool_amt,
             fee=0,
         ).submit()
- 
+
         self.total_harvested += surplus
         return surplus
  
@@ -494,3 +529,27 @@ class StakingEscrow(ARC4Contract):
     def get_state(self) -> UInt64:
         # Returns sprout_asa_id for convenience (0 if not bootstrapped).
         return self.sprout_asa_id
+
+    @abimethod(readonly=True)
+    def get_admin_fee_bps(self) -> UInt64:
+        # The admin fee in basis points of harvested surplus (1000 = 10%). Fixed at
+        # compile time; exposed so the UI can display the current split without
+        # hardcoding it.
+        return UInt64(ADMIN_FEE_BPS)
+
+    @abimethod(readonly=True)
+    def get_total_admin_fee(self) -> UInt64:
+        # Lifetime microAlgo paid to the admin as the harvest fee (telemetry).
+        return self.total_admin_fee
+
+    @abimethod(readonly=True)
+    def preview_harvest_split(self) -> UInt64:
+        # The admin cut the NEXT harvest would pay at the current balance, so the UI
+        # can show "admin fee / pool" before anyone triggers the sweep. Mirrors
+        # harvest's math exactly. Returns 0 when there is no surplus.
+        app_bal = Global.current_application_address.balance
+        floor = self._harvest_floor()
+        if app_bal <= floor:
+            return UInt64(0)
+        surplus = app_bal - floor
+        return (surplus * ADMIN_FEE_BPS) // BPS_DENOM

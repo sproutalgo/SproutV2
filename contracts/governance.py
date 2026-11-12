@@ -77,12 +77,13 @@ MIN_STAKE = 1_000_000
 # claim on the pool, and admin box-deletion in phase 0 is possible only once the
 # epoch has been abandoned long enough that no honest finalize came.
 #
-# ⚠️ TESTING VALUE: set to 0 so recovery is reachable immediately at tally_round
-# during LocalNet/testnet runs. BEFORE MAINNET, raise this to a real delay
-# (~1 week at ~2.8s/round ≈ 216_000 rounds). At 0, the admin CAN delete a candidate
-# the moment tally opens — the winner-censorship window M-B closes is reopened — so
-# this value is safe only for testing.
-RECOVERY_DELAY = 0
+# Mainnet value: ~1 week at ~2.8s/round ≈ 216_000 rounds. The recovery hatch stays
+# closed for a full week past tally_round, so an honest finalize always has an
+# uncontested first claim on the pool and the admin cannot delete a legitimate winner
+# in the normal tally window. (Was 0 during LocalNet/testnet runs so recovery was
+# reachable immediately; 0 is safe only for testing — it reopens the winner-censorship
+# window M-B closes.)
+RECOVERY_DELAY = 216_000
 
 
 class VoterBox(Struct):
