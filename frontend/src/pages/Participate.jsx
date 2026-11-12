@@ -21,6 +21,18 @@ import CycleStatus from '../components/CycleStatus'
 // ALGO staking does NOT give a vote; Sprout staking does NOT grow the pool. The copy and
 // layout make that boundary explicit.
 const MICRO = 1_000_000
+const MAX_DECIMALS = 6   // ALGO and Sprout both have 6 decimals
+
+// Keep an amount field to a valid decimal with at most 6 fractional digits. Rejects a
+// keystroke that would exceed 6 decimals (so 1.2345678 can't be entered), strips any
+// non-numeric characters, and allows a lone trailing '.' while typing. Returns the
+// previous value unchanged when the new input is invalid, so typing simply won't take.
+function sanitizeAmount(next, prev) {
+  if (next === '') return ''
+  // digits with an optional single decimal point and up to 6 fractional digits
+  if (!/^\d*\.?\d{0,6}$/.test(next)) return prev
+  return next
+}
 
 export default function Participate() {
   const { activeAddress, signTransactions } = useWallet()
@@ -178,7 +190,7 @@ export default function Participate() {
               <div className="card" style={{ padding: 22, display: 'grid', gap: 12 }}>
                 <div className="field">
                   <label>Amount (ALGO)</label>
-                  <input className="input" inputMode="decimal" placeholder="0.0" value={algoAmt} onChange={e => setAlgoAmt(e.target.value)} />
+                  <input className="input" inputMode="decimal" placeholder="0.0" value={algoAmt} onChange={e => setAlgoAmt(sanitizeAmount(e.target.value, algoAmt))} />
                 </div>
                 <button className="btn btn-primary btn-block" disabled={!!busy} onClick={doAlgoStake}>
                   {busy === 'algo-stake' ? 'Staking…' : 'Stake ALGO'}
@@ -212,7 +224,7 @@ export default function Participate() {
                   : <span style={{ fontSize: 13, color: 'var(--text-faint)' }}>No active vote.</span>}
                 <div className="field">
                   <label>Amount (SPROUT)</label>
-                  <input className="input" inputMode="decimal" placeholder="0.0" value={sproutAmt} onChange={e => setSproutAmt(e.target.value)} />
+                  <input className="input" inputMode="decimal" placeholder="0.0" value={sproutAmt} onChange={e => setSproutAmt(sanitizeAmount(e.target.value, sproutAmt))} />
                 </div>
                 <button className="btn btn-primary btn-block" disabled={!!busy} onClick={doSproutStake}>
                   {busy === 'sprout-stake' ? 'Staking…' : 'Stake Sprout'}
