@@ -69,6 +69,29 @@ const sendAndConfirm = async (algod, signed, txId) => {
   return algosdk.waitForConfirmation(algod, txId, 6)
 }
 
+// Read the new app id out of a create confirmation, robust to algosdk return shapes.
+// Different algosdk versions/codecs expose it as 'application-index' (hyphen, REST
+// JSON), 'applicationIndex' (camelCase, v3 typed clients), nested under confirmedTxn/
+// txn/apply-data, and as a Number OR BigInt. Try them all, coerce safely.
+function readNewAppId(res) {
+  const cands = [
+    res?.['application-index'],
+    res?.applicationIndex,
+    res?.confirmedTxn?.['application-index'],
+    res?.confirmedTxn?.applicationIndex,
+    res?.['apply-data']?.['application-index'],
+    res?.applyData?.applicationIndex,
+    res?.txn?.['application-index'],
+    res?.txn?.applicationIndex,
+  ]
+  for (const c of cands) {
+    if (c === undefined || c === null) continue
+    const n = typeof c === 'bigint' ? Number(c) : Number(c)
+    if (Number.isFinite(n) && n > 0) return n
+  }
+  return 0
+}
+
 export default function EscrowBootstrap() {
   const { activeAddress, signTransactions } = useWallet()
   const { addToast } = useToast()
@@ -134,7 +157,15 @@ export default function EscrowBootstrap() {
       const create = await buildCreateEscrowTxn({ sender: activeAddress, approvalProgram, clearProgram })
       const [sc] = await signTransactions([algosdk.encodeUnsignedTransaction(create.txn)])
       const createRes = await sendAndConfirm(algodClient, [sc], create.txId)
-      const appId = Number(createRes['application-index'])
+      let appId = readNewAppId(createRes)
+      // Last-resort fallback: pull the app id straight from the pending-txn endpoint,
+      // which always carries it, in case waitForConfirmation returned an odd shape.
+      if (!appId) {
+        try {
+          const info = await algodClient.pendingTransactionInformation(create.txId).do()
+          appId = readNewAppId(info)
+        } catch { /* leave 0 */ }
+      }
       if (!appId) throw new Error('Could not read new app id from create confirmation')
 
       // 2) Fund the app account.
