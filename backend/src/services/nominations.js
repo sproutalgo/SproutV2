@@ -100,9 +100,12 @@ export async function getTally() {
   const round = await getCurrentRound()
 
   // All approved projects (the candidates). We return every one, even at 0 votes.
+  // select('*') (not a fixed column list) so the query never fails if an optional
+  // column like payout_address isn't present on this deployment — we pick fields with
+  // fallbacks below. This mirrors the directory service's select('*') approach.
   const { data: entries, error: entriesErr } = await supabasePublic
     .from('directory_entries')
-    .select('id, name, tagline, candidate_number, wallet_address, payout_address')
+    .select('*')
     .eq('status', 'approved')
   if (entriesErr) throw entriesErr
 
