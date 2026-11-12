@@ -43,16 +43,15 @@ export default function Layout({ children }) {
   }
 
   // Nav order: the funding engine first (Directory = candidate roster where nominating
-  // happens, Stake & Vote = the combined participate page), then crowdfunding (Campaigns),
-  // then the personal/utility items. The Fund hub still exists at /fund and is reachable
-  // from these pages and the landing; it's just not its own nav item.
+  // happens, Engine = the engine hub at /fund, which links through to stake/vote/results),
+  // then crowdfunding (Campaigns), then the personal/utility items.
   const nav = [
-    { label: 'Directory',    to: '/directory' },
-    { label: 'Stake & Vote', to: '/fund/participate' },
-    { label: 'Campaigns',    to: '/campaigns' },
-    { label: 'My garden',    to: '/my-projects' },
-    { label: 'FAQ',          to: '/faq' },
-    { label: 'Cleanup',      to: '/cleanup' },
+    { label: 'Directory', to: '/directory' },
+    { label: 'Engine',    to: '/fund' },
+    { label: 'Campaigns', to: '/campaigns' },
+    { label: 'My garden', to: '/my-projects' },
+    { label: 'FAQ',       to: '/faq' },
+    { label: 'Cleanup',   to: '/cleanup' },
     ...(isAdmin ? [{ label: 'Admin', to: '/admin', danger: true, icon: <Icon.shield style={{ width: 13, height: 13 }} /> }] : []),
   ]
 
