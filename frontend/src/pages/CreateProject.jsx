@@ -395,6 +395,10 @@ export default function CreateProject() {
                       if (val) {
                         const parent = creatorProjects.find(p => String(p.app_id) === val)
                         if (parent) {
+                          // Normalize the parent's highlights back into the form's fixed
+                          // 3-slot shape. registerProject saves them filtered to non-empty,
+                          // so the stored array can hold 0–3 entries; pad/truncate to 3.
+                          const ph = Array.isArray(parent.highlights) ? parent.highlights : []
                           setForm(f => ({
                             ...f,
                             name:        parent.name        || f.name,
@@ -402,7 +406,14 @@ export default function CreateProject() {
                             description: parent.description || f.description,
                             category:    parent.category    || f.category,
                             websiteUrl:  parent.website_url || f.websiteUrl,
+                            highlights:  [ph[0] || '', ph[1] || '', ph[2] || ''],
                           }))
+                          // Carry the series-wide goal. It's stored in microALGO
+                          // (series_goal_micro); the form field is whole ALGO, so convert.
+                          const sgMicro = Number(parent.series_goal_micro)
+                          if (Number.isFinite(sgMicro) && sgMicro > 0) {
+                            setSeriesTotalGoal(String(Math.round(sgMicro / 1_000_000)))
+                          }
                         }
                       }
                     }}>
