@@ -1,27 +1,43 @@
 // EscrowBootstrap.jsx — admin-only page to deploy + bootstrap the Staking Escrow.
 //
-// Soft-gated by the obscure route (you only share the URL) AND by VITE_ADMIN_ADDRESS
-// matching the connected wallet. The HARD gate is on-chain: bootstrap asserts the
-// caller is the app's creator, so only the wallet that creates the app can bootstrap
-// it — URL secrecy is convenience, not the security boundary.
+// Soft-gated by the obscure route AND by VITE_ADMIN_ADDRESS matching the connected
+// wallet. The HARD gate is on-chain: create makes the connected wallet the app
+// creator, and bootstrap asserts the caller is that creator — URL secrecy is
+// convenience, not the security boundary.
 //
-// Wire a route to this (e.g. /x/escrow-bootstrap-<random>) and DON'T link it in nav.
+// TWO-STEP DEPLOY (this is deliberate — it breaks the escrow<->governance
+// chicken-and-egg):
+//   Step 1  Create + fund the escrow app. This needs NO addresses. It reveals the
+//           Escrow App ID so you can proceed to deploy governance.
+//   Step 2  Bootstrap(admin, pool_addr). Here pool_addr is the GOVERNANCE APP's
+//           account address — which only exists after governance is created. So you
+//           create the escrow, then create governance, derive its address, and come
+//           back here to bootstrap with that address.
 //
-// Requires the compiled programs. Fetches them from /contracts at runtime so the
-// large base64 TEAL isn't bundled; place escrow_approval.teal / escrow_clear.teal
-// where the app can GET them (public/ or your static host), or import them if you
-// prefer bundling. See the README.
+// The in-progress Escrow App ID is persisted to localStorage, so you can leave this
+// page to deploy governance and return to finish the bootstrap without losing it.
+//
+// Requires the compiled programs at /contracts/escrow_approval.teal and
+// /contracts/escrow_clear.teal (see the README).
 
 import React, { useState, useEffect } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import { algodClient, ADMIN_ADDRESS } from '../utils/algorand'
 import { useToast } from '../context/ToastContext'
-import { deployAndBootstrap, closeEscrow } from '../utils/escrowDeploy'
+import {
+  buildCreateEscrowTxn,
+  buildFundAppTxn,
+  buildBootstrapTxn,
+  closeEscrow,
+} from '../utils/escrowDeploy'
 
-// Where the compiled TEAL lives, relative to the site root. Adjust to taste.
+// Where the compiled TEAL lives, relative to the site root.
 const APPROVAL_URL = '/contracts/escrow_approval.teal'
 const CLEAR_URL    = '/contracts/escrow_clear.teal'
+
+// localStorage key for the in-progress (created-but-not-bootstrapped) escrow app.
+const PENDING_KEY = 'sprout_pending_escrow'
 
 function b64ToBytes(b64) {
   const bin = atob(b64)
@@ -48,22 +64,29 @@ function isAddr(a) {
   try { algosdk.decodeAddress(a); return true } catch { return false }
 }
 
+const sendAndConfirm = async (algod, signed, txId) => {
+  await algod.sendRawTransaction(signed).do()
+  return algosdk.waitForConfirmation(algod, txId, 6)
+}
+
 export default function EscrowBootstrap() {
   const { activeAddress, signTransactions } = useWallet()
   const { addToast } = useToast()
 
+  // Step 1 (create + fund) state
+  const [fundAlgo, setFundAlgo] = useState('2')
+  const [creating, setCreating] = useState(false)
+  const [createStep, setCreateStep] = useState('')
+
+  // The created-but-not-yet-bootstrapped escrow app. Persisted so you can leave to
+  // deploy governance and come back. { appId, appAddress }
+  const [pending, setPending] = useState(null)
+
+  // Step 2 (bootstrap) state
   const [adminAddress, setAdminAddress] = useState('')
   const [poolAddress, setPoolAddress] = useState('')
-
-  // Default the admin to the connected wallet — that's the common case (admin =
-  // you). Only prefill while the field is still empty, so it never overwrites an
-  // address you've deliberately typed (e.g. a multisig). Editable either way.
-  useEffect(() => {
-    if (activeAddress) setAdminAddress(prev => (prev === '' ? activeAddress : prev))
-  }, [activeAddress])
-  const [fundAlgo, setFundAlgo] = useState('2')
-  const [step, setStep] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [bootstrapping, setBootstrapping] = useState(false)
+  const [bootStep, setBootStep] = useState('')
   const [result, setResult] = useState(null)
 
   // Close/recover state
@@ -75,33 +98,108 @@ export default function EscrowBootstrap() {
 
   const isAdmin = activeAddress && ADMIN_ADDRESS && activeAddress === ADMIN_ADDRESS
 
-  const canRun = isAdmin && isAddr(adminAddress) && isAddr(poolAddress) && !busy
+  // Restore any in-progress escrow app on mount, and default the admin field to the
+  // connected wallet (the common case — it's the creator).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PENDING_KEY)
+      if (raw) setPending(JSON.parse(raw))
+    } catch { /* ignore */ }
+  }, [])
 
-  async function run() {
-    if (!canRun) return
-    setBusy(true); setResult(null); setStep('Loading compiled programs…')
+  useEffect(() => {
+    if (activeAddress && !adminAddress) setAdminAddress(activeAddress)
+  }, [activeAddress]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function savePending(p) {
+    setPending(p)
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(p)) } catch { /* ignore */ }
+  }
+  function clearPending() {
+    setPending(null)
+    try { localStorage.removeItem(PENDING_KEY) } catch { /* ignore */ }
+  }
+
+  // ── Step 1: create + fund (no addresses required) ──────────────────────────
+  const canCreate = isAdmin && !creating && Number(fundAlgo) > 0
+
+  async function doCreate() {
+    if (!canCreate) return
+    setCreating(true); setResult(null); setCreateStep('Loading compiled programs…')
     try {
       const { approvalProgram, clearProgram } = await loadPrograms()
-      const out = await deployAndBootstrap({
-        signTransactions,
+
+      // 1) Create the app.
+      setCreateStep('Creating escrow application…')
+      const create = await buildCreateEscrowTxn({ sender: activeAddress, approvalProgram, clearProgram })
+      const [sc] = await signTransactions([algosdk.encodeUnsignedTransaction(create.txn)])
+      const createRes = await sendAndConfirm(algodClient, [sc], create.txId)
+      const appId = Number(createRes['application-index'])
+      if (!appId) throw new Error('Could not read new app id from create confirmation')
+
+      // 2) Fund the app account.
+      setCreateStep(`Funding app ${appId}…`)
+      const fund = await buildFundAppTxn({ sender: activeAddress, appId, microAlgo: Math.round(Number(fundAlgo) * 1_000_000) })
+      const [sf] = await signTransactions([algosdk.encodeUnsignedTransaction(fund.txn)])
+      await sendAndConfirm(algodClient, [sf], fund.txId)
+
+      const appAddress = algosdk.getApplicationAddress(appId)
+      savePending({ appId, appAddress })
+      setCreateStep(`Created + funded. Escrow App ID ${appId}.`)
+      addToast(`Escrow app ${appId} created + funded. Now deploy governance, then bootstrap below.`, 'success', 10000)
+    } catch (e) {
+      addToast(e.message || 'Create failed', 'error', 10000)
+      setCreateStep(`Failed: ${e.message || e}`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // ── Step 2: bootstrap (needs the governance app address as pool_addr) ───────
+  const canBootstrap =
+    isAdmin && !bootstrapping && pending?.appId &&
+    isAddr(adminAddress) && isAddr(poolAddress)
+
+  async function doBootstrap() {
+    if (!canBootstrap) return
+    setBootstrapping(true); setResult(null); setBootStep('Bootstrapping (minting Sprout ASA, pinning admin + pool)…')
+    try {
+      const boot = await buildBootstrapTxn({
         sender: activeAddress,
-        approvalProgram,
-        clearProgram,
+        appId: pending.appId,
         adminAddress,
         poolAddress,
-        fundMicroAlgo: Math.round(Number(fundAlgo) * 1_000_000),
-        onStep: setStep,
       })
-      setResult(out)
-      addToast('Escrow deployed + bootstrapped', 'success', 8000)
+      const [sb] = await signTransactions([algosdk.encodeUnsignedTransaction(boot.txn)])
+      const bootRes = await sendAndConfirm(algodClient, [sb], boot.txId)
+
+      // Read the Sprout ASA id from the inner-txn results.
+      let sproutAsaId = null
+      const inner = bootRes['inner-txns'] || []
+      for (const itx of inner) {
+        if (itx['asset-index']) { sproutAsaId = Number(itx['asset-index']); break }
+        if (itx['created-asset-index']) { sproutAsaId = Number(itx['created-asset-index']); break }
+      }
+      if (!sproutAsaId && bootRes['logs']) {
+        try {
+          const log = bootRes['logs'][bootRes['logs'].length - 1]
+          const bytes = Uint8Array.from(atob(log), c => c.charCodeAt(0))
+          if (bytes.length >= 12) {
+            const dv = new DataView(bytes.buffer, bytes.byteLength - 8, 8)
+            sproutAsaId = Number(dv.getBigUint64(0))
+          }
+        } catch { /* leave null */ }
+      }
+
+      setResult({ appId: pending.appId, appAddress: pending.appAddress, sproutAsaId })
+      setBootStep('Done.')
+      addToast('Escrow bootstrapped — Sprout ASA minted, addresses pinned', 'success', 8000)
+      clearPending()
     } catch (e) {
-      // Coerce to a plain string — algosdk errors can carry non-string fields
-      // (e.g. Address objects) that would crash the render if dropped into JSX.
-      const msg = String(e?.message ?? e ?? 'Deploy failed')
-      addToast(msg, 'error', 10000)
-      setStep(`Failed: ${msg}`)
+      addToast(e.message || 'Bootstrap failed', 'error', 10000)
+      setBootStep(`Failed: ${e.message || e}`)
     } finally {
-      setBusy(false)
+      setBootstrapping(false)
     }
   }
 
@@ -126,7 +224,6 @@ export default function EscrowBootstrap() {
     } catch (e) {
       const msg = e.message || String(e)
       setCloseStep(`Failed: ${msg}`)
-      // The most common expected failure: principal still outstanding.
       if (/principal outstanding/i.test(msg)) {
         addToast('Close blocked: depositors still hold Sprout. All principal must be withdrawn first.', 'error', 10000)
       } else if (/go offline/i.test(msg)) {
@@ -159,63 +256,96 @@ export default function EscrowBootstrap() {
     <section className="section wrap" style={{ maxWidth: 640 }}>
       <h1 style={{ fontSize: 24, margin: '0 0 6px' }}>Deploy &amp; bootstrap the Staking Escrow</h1>
       <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: '0 0 20px' }}>
-        Creates the escrow app, funds it, and calls <code>bootstrap(admin, pool_addr)</code> —
-        which mints the fixed Sprout supply and pins both addresses immutably. The wallet you're
-        connected with becomes the app creator and must be the one to bootstrap.
+        Two steps, on purpose. <strong>Step 1</strong> creates + funds the escrow app and needs
+        no addresses — it just gives you the Escrow App ID. Then deploy the governance app and
+        copy its <em>app account address</em>. <strong>Step 2</strong> bootstraps the escrow with
+        that governance address as the pool, so harvested yield flows into the voting pool. Both
+        addresses are pinned permanently at bootstrap.
       </p>
 
+      {/* ── Step 1: create + fund ─────────────────────────────────────────── */}
       <div className="card form-card">
         <div className="form-stack">
-          <div className="field">
-            <label htmlFor="admin">Admin address (immutable)</label>
-            <input id="admin" className="input" placeholder="multisig or single address"
-              value={adminAddress} onChange={e => setAdminAddress(e.target.value.trim())} />
-            <span className="field-hint" style={{ color: adminAddress && !isAddr(adminAddress) ? 'var(--danger)' : 'var(--text-faint)' }}>
-              {adminAddress && !isAddr(adminAddress)
-                ? 'Not a valid Algorand address'
-                : 'Defaults to your connected wallet. Controls pause + keyreg, can never be changed — use a multisig if you want key-loss protection.'}
-            </span>
-            {activeAddress && adminAddress !== activeAddress && (
-              <button type="button" className="btn btn-ghost" style={{ marginTop: 6, fontSize: 13 }}
-                onClick={() => setAdminAddress(activeAddress)}>
-                Use connected wallet
-              </button>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor="pool">Pool wallet address (immutable) — receives harvested yield</label>
-            <input id="pool" className="input" placeholder="wallet you control, for testing"
-              value={poolAddress} onChange={e => setPoolAddress(e.target.value.trim())} />
-            <span className="field-hint" style={{ color: poolAddress && !isAddr(poolAddress) ? 'var(--danger)' : 'var(--text-faint)' }}>
-              {poolAddress && !isAddr(poolAddress) ? 'Not a valid Algorand address' : 'For testing, a wallet you control so you can watch yield land. Immutable — wrong value sends yield there forever.'}
-            </span>
-          </div>
+          <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>Step 1 — Create &amp; fund the app</h2>
+          <p style={{ margin: '0 0 8px', fontSize: 13.5, color: 'var(--text-muted)' }}>
+            No addresses needed yet. The connected wallet becomes the app creator (and the only
+            wallet that can bootstrap it).
+          </p>
 
           <div className="field">
             <label htmlFor="fund">Fund the app account with (ALGO)</label>
             <input id="fund" className="input" inputMode="decimal"
-              value={fundAlgo} onChange={e => setFundAlgo(e.target.value)} />
+              value={fundAlgo} onChange={e => setFundAlgo(e.target.value)} disabled={!!pending} />
             <span className="field-hint">Covers base MBR + ASA MBR + the 1 ALGO harvest buffer + fees. 2 ALGO is comfortable.</span>
           </div>
 
-          <button className="btn btn-primary" disabled={!canRun} onClick={run}>
-            {busy ? 'Working…' : 'Deploy + bootstrap'}
+          {!pending ? (
+            <button className="btn btn-primary" disabled={!canCreate} onClick={doCreate}>
+              {creating ? 'Working…' : 'Create + fund escrow app'}
+            </button>
+          ) : (
+            <div className="card" style={{ padding: 14, background: 'var(--accent-soft)', borderColor: 'var(--accent-line)' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 14 }}><strong>Escrow App ID:</strong> {pending.appId} <span className="badge badge-warn" style={{ marginLeft: 8 }}>awaiting bootstrap</span></p>
+              <p style={{ margin: '0 0 8px', fontSize: 13 }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{pending.appAddress}</code></p>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                Now deploy the governance app, copy its app account address, and bootstrap below.
+              </p>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={() => { if (confirm('Forget this created escrow app? Use this only if the create failed or you want to start over — the app itself still exists on-chain and would need manual cleanup.')) clearPending() }}>
+                Forget this pending app
+              </button>
+            </div>
+          )}
+          {createStep && !pending && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{createStep}</div>}
+        </div>
+      </div>
+
+      {/* ── Step 2: bootstrap ─────────────────────────────────────────────── */}
+      <div className="card form-card" style={{ marginTop: 20, opacity: pending ? 1 : 0.6 }}>
+        <div className="form-stack">
+          <h2 style={{ margin: '0 0 4px', fontSize: 18 }}>Step 2 — Bootstrap</h2>
+          <p style={{ margin: '0 0 8px', fontSize: 13.5, color: 'var(--text-muted)' }}>
+            {pending
+              ? <>Bootstrapping escrow app <strong>{pending.appId}</strong>. Calls <code>bootstrap(admin, pool_addr)</code> — mints the fixed Sprout supply and pins both addresses immutably.</>
+              : <>Create the app in Step 1 first.</>}
+          </p>
+
+          <div className="field">
+            <label htmlFor="admin">Admin address (immutable)</label>
+            <input id="admin" className="input" placeholder="multisig or single address"
+              value={adminAddress} onChange={e => setAdminAddress(e.target.value.trim())} disabled={!pending} />
+            <span className="field-hint" style={{ color: adminAddress && !isAddr(adminAddress) ? 'var(--danger)' : 'var(--text-faint)' }}>
+              {adminAddress && !isAddr(adminAddress) ? 'Not a valid Algorand address' : 'Controls pause + keyreg. Can never be changed. A multisig is recommended.'}
+            </span>
+          </div>
+
+          <div className="field">
+            <label htmlFor="pool">Pool address (immutable) — the GOVERNANCE app's account address</label>
+            <input id="pool" className="input" placeholder="governance app account address"
+              value={poolAddress} onChange={e => setPoolAddress(e.target.value.trim())} disabled={!pending} />
+            <span className="field-hint" style={{ color: poolAddress && !isAddr(poolAddress) ? 'var(--danger)' : 'var(--text-faint)' }}>
+              {poolAddress && !isAddr(poolAddress)
+                ? 'Not a valid Algorand address'
+                : 'The governance app’s account address (derive it from the Gov App ID). Harvested yield lands here and is distributed to winners. Immutable — a wrong value misroutes all yield forever.'}
+            </span>
+          </div>
+
+          <button className="btn btn-primary" disabled={!canBootstrap} onClick={doBootstrap}>
+            {bootstrapping ? 'Working…' : 'Bootstrap escrow'}
           </button>
-          {step && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{step}</div>}
+          {bootStep && <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{bootStep}</div>}
         </div>
       </div>
 
       {result && (
         <div className="card" style={{ padding: 16, marginTop: 20 }}>
-          <h2 style={{ marginTop: 0, fontSize: 18 }}>Deployed ✓</h2>
+          <h2 style={{ marginTop: 0, fontSize: 18 }}>Bootstrapped ✓</h2>
           <p style={{ fontSize: 14, margin: '4px 0' }}><strong>Escrow App ID:</strong> {result.appId}</p>
           <p style={{ fontSize: 14, margin: '4px 0' }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{result.appAddress}</code></p>
           <p style={{ fontSize: 14, margin: '4px 0' }}><strong>Sprout ASA ID:</strong> {result.sproutAsaId ?? '(read from the bootstrap txn in an explorer)'}</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 10 }}>
             Put these into your env: <code>VITE_ESCROW_APP_ID={result.appId}</code>,{' '}
-            <code>VITE_SPROUT_ASA_ID={result.sproutAsaId ?? '…'}</code>. The app address is where
-            deposits go and where you'd send a top-up if ever needed.
+            <code>VITE_SPROUT_ASA_ID={result.sproutAsaId ?? '…'}</code>. Then bootstrap governance
+            with this Sprout ASA ID and Escrow App ID.
           </p>
         </div>
       )}

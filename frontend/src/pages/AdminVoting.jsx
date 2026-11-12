@@ -12,7 +12,7 @@ import { useWallet } from '@txnlab/use-wallet-react'
 import algosdk from 'algosdk'
 import { algodClient, ADMIN_ADDRESS } from '../utils/algorand'
 import { useToast } from '../context/ToastContext'
-import { deployAndBootstrap, closeGovernance, discardUnbootstrapped } from '../utils/governanceDeploy'
+import { createAndFund, bootstrapOnly, closeGovernance, discardUnbootstrapped } from '../utils/governanceDeploy'
 import {
   stake, unstake, vote, openEpoch, registerCandidate,
   finalizeAuto, fetchStaked, fetchPool, listCandidateIds, IDS,
@@ -59,10 +59,16 @@ export default function AdminVoting() {
   const { addToast } = useToast()
   const [busy, setBusy] = useState('')
 
-  // deploy
+  // deploy (split into create+fund, then bootstrap)
   const [adminAddr, setAdminAddr] = useState('')
   const [deployStep, setDeployStep] = useState('')
   const [deployed, setDeployed] = useState(null)
+  // Created-but-not-bootstrapped gov app, persisted so you can leave to bootstrap the
+  // escrow (which needs this app's address) and come back. { appId, appAddress }
+  const [pendingGov, setPendingGov] = useState(null)
+  const [bootSproutAsa, setBootSproutAsa] = useState('') // Sprout ASA id (from escrow bootstrap)
+  const [bootEscrowApp, setBootEscrowApp] = useState('')  // Escrow app id (informational)
+  const GOV_PENDING_KEY = 'sprout_pending_gov'
   // close
   const [closeAppId, setCloseAppId] = useState('')
   const [closeConfirm, setCloseConfirm] = useState('')
@@ -89,6 +95,10 @@ export default function AdminVoting() {
   const isAdmin = !!activeAddress
 
   useEffect(() => { if (activeAddress) setAdminAddr(p => p || activeAddress) }, [activeAddress])
+  // Restore an in-progress (created-but-not-bootstrapped) gov app.
+  useEffect(() => {
+    try { const raw = localStorage.getItem(GOV_PENDING_KEY); if (raw) setPendingGov(JSON.parse(raw)) } catch { /* ignore */ }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!IDS.GOV_APP_ID) return
     fetchPool().then(setPool).catch(() => {})
@@ -145,17 +155,49 @@ export default function AdminVoting() {
     catch (e) { addToast(S(e), 'error', 9000) } finally { setBusy('') }
   }
 
-  async function doDeploy() {
-    if (!isAddr(adminAddr)) return addToast('Enter a valid admin address', 'error')
-    setBusy('deploy'); setDeployStep('Loading programs…'); setDeployed(null)
+  function saveGovPending(p) {
+    setPendingGov(p)
+    try { localStorage.setItem(GOV_PENDING_KEY, JSON.stringify(p)) } catch { /* ignore */ }
+  }
+  function clearGovPending() {
+    setPendingGov(null)
+    try { localStorage.removeItem(GOV_PENDING_KEY) } catch { /* ignore */ }
+  }
+
+  // Step 1 — create + fund the gov app. No ASA needed yet; this reveals the app
+  // address the escrow bootstrap requires as its pool_addr.
+  async function doCreateGov() {
+    setBusy('gov-create'); setDeployStep('Loading programs…'); setDeployed(null)
     try {
       const { approvalProgram, clearProgram } = await loadPrograms()
-      const out = await deployAndBootstrap({
+      const out = await createAndFund({
         signTransactions, sender: activeAddress, approvalProgram, clearProgram,
-        adminAddress: adminAddr, onStep: setDeployStep,
+        onStep: setDeployStep,
       })
-      setDeployed(out)
-      addToast('Governance deployed + bootstrapped', 'success', 8000)
+      saveGovPending(out)
+      addToast(`Governance app ${out.appId} created + funded. Copy its address into the escrow pool field.`, 'success', 10000)
+    } catch (e) { setDeployStep(`Failed: ${S(e)}`); addToast(S(e), 'error', 10000) }
+    finally { setBusy('') }
+  }
+
+  // Step 2 — bootstrap the created gov app with the FRESH Sprout ASA id (minted by
+  // the escrow bootstrap) and the escrow app id.
+  async function doBootstrapGov() {
+    if (!pendingGov?.appId) return addToast('Create the gov app first', 'error')
+    if (!isAddr(adminAddr)) return addToast('Enter a valid admin address', 'error')
+    if (!/^\d+$/.test(bootSproutAsa)) return addToast('Enter the Sprout ASA id (from the escrow bootstrap)', 'error')
+    setBusy('gov-boot'); setDeployStep('Bootstrapping…')
+    try {
+      const out = await bootstrapOnly({
+        signTransactions, sender: activeAddress, appId: pendingGov.appId,
+        adminAddress: adminAddr,
+        sproutAsaId: Number(bootSproutAsa),
+        escrowAppId: bootEscrowApp && /^\d+$/.test(bootEscrowApp) ? Number(bootEscrowApp) : 0,
+        onStep: setDeployStep,
+      })
+      setDeployed({ ...out, sproutAsaId: Number(bootSproutAsa) })
+      addToast('Governance bootstrapped — opted into Sprout, admin pinned', 'success', 8000)
+      clearGovPending()
     } catch (e) { setDeployStep(`Failed: ${S(e)}`); addToast(S(e), 'error', 10000) }
     finally { setBusy('') }
   }
@@ -179,16 +221,55 @@ export default function AdminVoting() {
         {myStake != null && <> · Your stake {toAlgo(myStake.stakedMicro)} SPRT</>}
       </p>
 
-      {/* Deploy */}
+      {/* Deploy — split into create+fund (step 1) and bootstrap (step 2). This
+          breaks the escrow<->governance ordering: create gov first to get its
+          address for the escrow pool, bootstrap the escrow (mints Sprout), then
+          bootstrap gov here with that fresh Sprout ASA id. */}
       <Card title="1. Deploy & bootstrap">
-        <Field label="Admin address (immutable)">
-          <input className="input" value={adminAddr} onChange={e => setAdminAddr(e.target.value.trim())} />
-        </Field>
-        <button className="btn btn-primary" disabled={busy === 'deploy'} onClick={doDeploy}>
-          {busy === 'deploy' ? 'Working…' : 'Deploy + bootstrap'}
-        </button>
+        {/* Step 1 */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Step 1 — Create &amp; fund (no ASA needed)</div>
+          {!pendingGov ? (
+            <button className="btn btn-primary" disabled={busy === 'gov-create'} onClick={doCreateGov}>
+              {busy === 'gov-create' ? 'Working…' : 'Create + fund gov app'}
+            </button>
+          ) : (
+            <div className="card" style={{ padding: 12, background: 'var(--accent-soft)', borderColor: 'var(--accent-line)' }}>
+              <div style={{ fontSize: 14 }}><strong>Gov App ID:</strong> {pendingGov.appId} <span className="badge badge-warn" style={{ marginLeft: 6 }}>awaiting bootstrap</span></div>
+              <div style={{ fontSize: 12.5, margin: '4px 0' }}><strong>App address (→ escrow pool_addr):</strong></div>
+              <code style={{ fontSize: 11.5, wordBreak: 'break-all' }}>{pendingGov.appAddress}</code>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
+                Paste this address into the escrow bootstrap (pool field), run that, then come back with the Sprout ASA id.
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
+                onClick={() => { if (confirm('Forget this created gov app? The app still exists on-chain. Use only if you want to start over.')) clearGovPending() }}>
+                Forget pending app
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Step 2 */}
+        <div style={{ opacity: pendingGov ? 1 : 0.6 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Step 2 — Bootstrap (after escrow is bootstrapped)</div>
+          <Field label="Admin address (immutable)">
+            <input className="input" value={adminAddr} onChange={e => setAdminAddr(e.target.value.trim())} disabled={!pendingGov} />
+          </Field>
+          <Field label="Sprout ASA id (from the escrow bootstrap)">
+            <input className="input" inputMode="numeric" placeholder="e.g. 3762082994"
+              value={bootSproutAsa} onChange={e => setBootSproutAsa(e.target.value.trim())} disabled={!pendingGov} />
+          </Field>
+          <Field label="Escrow app id (informational)">
+            <input className="input" inputMode="numeric" placeholder="e.g. 3766944326"
+              value={bootEscrowApp} onChange={e => setBootEscrowApp(e.target.value.trim())} disabled={!pendingGov} />
+          </Field>
+          <button className="btn btn-primary" disabled={busy === 'gov-boot' || !pendingGov} onClick={doBootstrapGov}>
+            {busy === 'gov-boot' ? 'Working…' : 'Bootstrap gov app'}
+          </button>
+        </div>
+
         {deployStep && <Note>{deployStep}</Note>}
-        {deployed && <Note><strong>App {deployed.appId}</strong> — set VITE_GOV_APP_ID={deployed.appId}, then rebuild.</Note>}
+        {deployed && <Note><strong>App {deployed.appId}</strong> bootstrapped — set VITE_GOV_APP_ID={deployed.appId} and VITE_SPROUT_ASA_ID={deployed.sproutAsaId}, then rebuild.</Note>}
       </Card>
 
       {/* Open epoch — one base block; the three rounds derive at fixed offsets */}

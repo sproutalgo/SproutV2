@@ -73,21 +73,32 @@ export async function buildFundTxn({ sender, appId, microAlgo = 1_000_000 }) {
 }
 
 // ── bootstrap(admin, sprout_asa_id, escrow_app) — opts app into Sprout ────────
-export async function buildBootstrapTxn({ sender, appId, adminAddress }) {
+// sproutAsaId / escrowAppId are passed at call time so a split deploy can bootstrap
+// with the FRESHLY-MINTED escrow ASA, not a stale build-time env var. They fall back
+// to the env constants for back-compat with the one-shot orchestrator.
+export async function buildBootstrapTxn({ sender, appId, adminAddress, sproutAsaId, escrowAppId }) {
+  const asaId = Number(sproutAsaId ?? SPROUT_ASA_ID)
+  const escId = Number(escrowAppId ?? ESCROW_APP_ID)
+  if (!asaId) throw new Error('Sprout ASA id required for bootstrap (deploy the escrow first)')
   const sp = await getSp(2000) // covers the inner opt-in (fee:0)
   const m = method('bootstrap')
-  const appArgs = buildAppArgs(m, [adminAddress, BigInt(SPROUT_ASA_ID), BigInt(ESCROW_APP_ID)])
+  const appArgs = buildAppArgs(m, [adminAddress, BigInt(asaId), BigInt(escId)])
   const txn = algosdk.makeApplicationNoOpTxnFromObject({
     sender, suggestedParams: sp, appIndex: Number(appId), appArgs,
-    foreignAssets: [SPROUT_ASA_ID],   // the inner opt-in references the ASA
+    foreignAssets: [asaId],   // the inner opt-in references the ASA
   })
   return { txn, txId: txn.txID() }
 }
 
-// ── orchestrated deploy ───────────────────────────────────────────────────────
-export async function deployAndBootstrap({
+// ── split step 1: create + fund ONLY (no bootstrap) ───────────────────────────
+// Creates the governance app and funds its account. Returns { appId, appAddress }.
+// The app address is what the escrow bootstrap takes as its pool_addr — and it exists
+// the moment the app is created, before bootstrap. This is the whole point of the
+// split: create governance → take its address → bootstrap escrow (mints Sprout) →
+// bootstrap governance with that fresh Sprout ASA id.
+export async function createAndFund({
   signTransactions, sender, approvalProgram, clearProgram,
-  adminAddress, fundMicroAlgo = 1_000_000, onStep = () => {},
+  fundMicroAlgo = 1_000_000, onStep = () => {},
 }) {
   onStep('Creating governance application…')
   const create = await buildCreateTxn({ sender, approvalProgram, clearProgram })
@@ -101,11 +112,38 @@ export async function deployAndBootstrap({
   const [sf] = await signTransactions([algosdk.encodeUnsignedTransaction(fund.txn)])
   await sendAndConfirm([sf], fund.txId)
 
+  onStep(`Created + funded. Gov App ID ${appId}.`)
+  return { appId, appAddress: String(algosdk.getApplicationAddress(appId)) }
+}
+
+// ── split step 2: bootstrap an already-created gov app ────────────────────────
+// Call after the escrow has been bootstrapped, so the fresh Sprout ASA id is known.
+export async function bootstrapOnly({
+  signTransactions, sender, appId, adminAddress, sproutAsaId, escrowAppId,
+  onStep = () => {},
+}) {
   onStep('Bootstrapping (opt into Sprout, pin admin)…')
-  const boot = await buildBootstrapTxn({ sender, appId, adminAddress })
+  const boot = await buildBootstrapTxn({ sender, appId, adminAddress, sproutAsaId, escrowAppId })
   const [sb] = await signTransactions([algosdk.encodeUnsignedTransaction(boot.txn)])
   await sendAndConfirm([sb], boot.txId)
+  onStep('Done.')
+  return { appId, appAddress: String(algosdk.getApplicationAddress(Number(appId))) }
+}
 
+// ── orchestrated deploy (one-shot; env-based ASA/escrow ids) ──────────────────
+// Retained for back-compat. Only correct when the env already holds the right
+// Sprout ASA + escrow ids — i.e. NOT during a fresh split deploy. Prefer
+// createAndFund + bootstrapOnly for a first-time deploy.
+export async function deployAndBootstrap({
+  signTransactions, sender, approvalProgram, clearProgram,
+  adminAddress, sproutAsaId, escrowAppId, fundMicroAlgo = 1_000_000, onStep = () => {},
+}) {
+  const { appId } = await createAndFund({
+    signTransactions, sender, approvalProgram, clearProgram, fundMicroAlgo, onStep,
+  })
+  await bootstrapOnly({
+    signTransactions, sender, appId, adminAddress, sproutAsaId, escrowAppId, onStep,
+  })
   onStep('Done.')
   return { appId, appAddress: String(algosdk.getApplicationAddress(appId)) }
 }
