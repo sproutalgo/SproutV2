@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit'
 
 import projectsRouter from './routes/projects.js'
 import directoryRouter from './routes/directory.js'
+import nominationsRouter from './routes/nominations.js'
 import healthRouter   from './routes/health.js'
 import uploadRouter   from './routes/upload.js'
 import { startSyncJob } from './jobs/syncJob.js'
@@ -65,6 +66,10 @@ app.use('/api/directory', (req, res, next) => {
   if (['POST', 'PATCH', 'DELETE'].includes(req.method)) return writeLimiter(req, res, next)
   next()
 })
+app.use('/api/nominations', (req, res, next) => {
+  if (['POST', 'PATCH', 'DELETE'].includes(req.method)) return writeLimiter(req, res, next)
+  next()
+})
 
 // ─── Header size guard ────────────────────────────────────────────────────────
 // A base64-encoded signed Algorand transaction is ~400 bytes at most.
@@ -86,10 +91,11 @@ const uploadLimiter = rateLimit({
 })
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use('/api/health',    healthRouter)
-app.use('/api/projects',  projectsRouter)
-app.use('/api/directory', directoryRouter)
-app.use('/api/upload',    uploadLimiter, uploadRouter)
+app.use('/api/health',      healthRouter)
+app.use('/api/projects',    projectsRouter)
+app.use('/api/directory',   directoryRouter)
+app.use('/api/nominations', nominationsRouter)
+app.use('/api/upload',      uploadLimiter, uploadRouter)
 
 // 404 handler
 app.use((req, res) => {
