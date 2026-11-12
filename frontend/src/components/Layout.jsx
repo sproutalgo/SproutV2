@@ -49,7 +49,7 @@ export default function Layout({ children }) {
     { label: 'Directory', to: '/directory' },
     { label: 'Engine',    to: '/fund' },
     { label: 'Campaigns', to: '/campaigns' },
-    { label: 'My garden', to: '/my-projects' },
+    { label: 'My Garden', to: '/my-projects' },
     { label: 'FAQ',       to: '/faq' },
     { label: 'Cleanup',   to: '/cleanup' },
     ...(isAdmin ? [{ label: 'Admin', to: '/admin', danger: true, icon: <Icon.shield style={{ width: 13, height: 13 }} /> }] : []),
