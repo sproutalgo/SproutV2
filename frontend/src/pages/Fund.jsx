@@ -34,15 +34,11 @@ export default function Fund() {
     },
     {
       key: 'vote',
-      title: 'Stake Sprout & vote',
+      title: 'Stake Sprout & Vote',
       body: 'Stake Sprout for voting weight, then vote on which ballot projects win funding.',
       to: '/fund/participate',
       cta: votingLive ? 'Vote now' : 'Stake & view ballot',
-      note: votingLive
-        ? 'Voting is open'
-        : status?.deadline && phaseKey === 'nominating'
-          ? `Voting opens in ${status.deadline.label}`
-          : 'Voting opens with the next round',
+      note: null,
       live: votingLive,
     },
     {
