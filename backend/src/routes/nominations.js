@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { requireSignatureGeneric, requireAdminGeneric } from '../middleware/auth.js'
 import {
-  getTally, getMyVote, getTopN,
+  getTally, getMyVote, getTopN, getRoundResults,
   castVote, withdrawVote, resetTally, getCurrentRound,
 } from '../services/nominations.js'
 
@@ -85,6 +85,20 @@ router.get('/admin/top', requireAdminGeneric, async (req, res) => {
   } catch (e) {
     console.error(e)
     res.status(500).json({ error: 'Failed to fetch shortlist' })
+  }
+})
+
+// GET /api/nominations/admin/round/:n — the results of a PAST (or current) round, for
+// history. Resets don't delete votes, so any round's standings are reconstructable.
+router.get('/admin/round/:n', requireAdminGeneric, async (req, res) => {
+  try {
+    const n = Number(req.params.n)
+    if (!Number.isInteger(n) || n < 1) return res.status(400).json({ error: 'invalid round' })
+    const result = await getRoundResults(n)
+    res.json(result)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: 'Failed to fetch round results' })
   }
 })
 

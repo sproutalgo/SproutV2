@@ -139,11 +139,79 @@ export async function getTally() {
 
 // The admin's shortlist: the top N (default 8) projects by vote count in the current
 // round, with the payout address pre-resolved so they can be registered on-chain.
+//
+// TIE-WIDENING: a hard slice at N would silently drop projects tied with the Nth place
+// on an arbitrary alphabetical tiebreak — hiding the tie from the admin, who is the one
+// deciding the ballot. Instead, we INCLUDE every project whose vote count is >= the Nth
+// place's count, so all ties at the boundary are surfaced. The result can therefore
+// exceed N; each row is flagged with `inTopN` (true for the clear top N) and
+// `tiedAtCutoff` (true for rows beyond N that only made it via the tie), and `tie` on
+// the result says whether widening happened, so the admin page can show "9 shown — a
+// tie at 8th; pick which make the on-chain ballot."
 export async function getTopN(n = 8) {
   const { round, tally } = await getTally()
-  // Only include projects that actually received at least one vote.
-  const top = tally.filter((t) => t.votes > 0).slice(0, n)
-  return { round, top }
+  const voted = tally.filter((t) => t.votes > 0)   // already sorted desc by getTally
+
+  if (voted.length <= n) {
+    return {
+      round,
+      top: voted.map((t, i) => ({ ...t, rank: i + 1, inTopN: true, tiedAtCutoff: false })),
+      tie: false,
+      shown: voted.length,
+    }
+  }
+
+  // The cutoff is the vote count at the Nth place (1-indexed → index n-1). Include every
+  // project with votes >= cutoff; those beyond index n only qualify via the tie.
+  const cutoff = voted[n - 1].votes
+  const top = voted
+    .filter((t) => t.votes >= cutoff)
+    .map((t, i) => ({
+      ...t,
+      rank: i + 1,
+      inTopN: i < n,
+      tiedAtCutoff: i >= n,            // made the list only because of a tie at the cutoff
+    }))
+
+  return { round, top, tie: top.length > n, shown: top.length }
+}
+
+// Past-round results, for history. The reset never deletes votes — it bumps the round
+// counter — so any prior round's standings are reconstructable. Returns the same shape
+// as a tally for the given round.
+export async function getRoundResults(roundNumber) {
+  const { data: votes, error } = await supabasePublic
+    .from('nomination_votes')
+    .select('directory_entry_id')
+    .eq('round', roundNumber)
+  if (error) throw error
+
+  const counts = new Map()
+  for (const v of votes ?? []) {
+    counts.set(v.directory_entry_id, (counts.get(v.directory_entry_id) || 0) + 1)
+  }
+
+  // Resolve project names for the ids that got votes.
+  const ids = [...counts.keys()]
+  let names = new Map()
+  if (ids.length) {
+    const { data: entries } = await supabasePublic
+      .from('directory_entries')
+      .select('id, name, candidate_number')
+      .in('id', ids)
+    for (const e of entries ?? []) names.set(e.id, e)
+  }
+
+  const results = ids
+    .map((id) => ({
+      directory_entry_id: id,
+      name: names.get(id)?.name ?? '(deleted project)',
+      candidate_number: names.get(id)?.candidate_number ?? null,
+      votes: counts.get(id),
+    }))
+    .sort((a, b) => b.votes - a.votes || String(a.name).localeCompare(String(b.name)))
+
+  return { round: roundNumber, totalVotes: (votes ?? []).length, results }
 }
 
 // ─── Admin reset ──────────────────────────────────────────────────────────────
