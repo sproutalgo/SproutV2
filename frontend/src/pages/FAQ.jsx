@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../components/UI'
@@ -33,7 +34,7 @@ const SECTIONS = [
       },
       {
         q: 'What is the difference between staking ALGO and staking Sprout?',
-        a: 'They are two separate actions on the Stake & Vote page. Staking ALGO grows the shared prize pool — your ALGO is pooled in the escrow, earns rewards, and those rewards fund the winning projects. Staking ALGO does not give you a vote. Staking Sprout gives you voting weight — it is how you influence which projects win. Neither action is locked; you can withdraw either at any time.',
+        a: 'They are two separate actions on the Engine page. Staking ALGO grows the shared prize pool — your ALGO is pooled in the escrow, earns rewards, and those rewards fund the winning projects. Staking ALGO does not give you a vote. Staking Sprout gives you voting weight — it is how you influence which projects win. Neither action is locked; you can withdraw either at any time.',
       },
       {
         q: 'What is Sprout, and where does it come from?',
@@ -53,7 +54,7 @@ const SECTIONS = [
       },
       {
         q: 'How are winners chosen and paid?',
-        a: 'When the voting window closes and the round finalizes, the funding pool is computed live (the escrow balance beyond what it must reserve) so winners receive the full round\'s accumulated yield. The top projects by vote weight split the pool in an equal share each. If projects tie at the cutoff, the winner set widens to include them. Payouts are made by the contract directly to the winning projects — there is no admin control over the funds.',
+        a: 'When the voting window closes and the round finalizes, the funding pool is computed live (the escrow balance beyond what it must reserve) so winners receive the full round\'s accumulated yield. The top three projects by vote weight split the pool in an equal share each; if projects tie at the cutoff, the winner set widens to include them, so a round can fund more than three. The contract itself pays the winners — the admin triggers the tally and payout but cannot choose or redirect who wins.',
       },
       {
         q: 'Can I withdraw my staked ALGO whenever I want?',
@@ -161,7 +162,7 @@ const SECTIONS = [
       },
       {
         q: 'How does Sprout make money?',
-        a: 'Only from crowdfunding campaign fees: the non-refundable listing fee at deployment and the 4% success fee on funded campaigns. The funding engine takes no cut — payouts go from the contract directly to winning projects, and the platform never receives staked ALGO, staking rewards, unclaimed campaign tokens, or leftover ALGO.',
+        a: 'From two sources. Crowdfunding campaigns pay a non-refundable listing fee at deployment and a 4% success fee on funded campaigns. The funding engine takes a 10% cut of the staking rewards it harvests — the other 90% goes to the prize pool that funds projects. That 10% comes only from rewards, never from anyone\'s staked principal, which always stays fully withdrawable. The platform never receives staked ALGO itself, unclaimed campaign tokens, or leftover ALGO.',
       },
       {
         q: 'Is the platform open source?',
@@ -289,7 +290,7 @@ export default function FAQ() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link to="/fund/participate" className="btn btn-ghost">Stake &amp; vote</Link>
+          <Link to="/fund" className="btn btn-ghost">Explore the engine</Link>
           <Link to="/create" className="btn btn-primary">
             Launch a project <Icon.arrow style={{ width: 16, height: 16 }} />
           </Link>
