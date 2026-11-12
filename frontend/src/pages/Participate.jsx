@@ -92,8 +92,16 @@ export default function Participate() {
 
   const phaseKey = status?.phase?.key
   const votingOpen = phaseKey === 'voting'
-  const algoStakedMicro = algoPos?.principalMicro ?? 0   // pooled ALGO = escrow Sprout principal
   const sproutStakedMicro = sprout?.stakedMicro ?? 0
+  // ALGO withdrawable RIGHT NOW = Sprout sitting in the wallet (1:1). Sprout staked for
+  // voting must be unstaked from governance before it can redeem ALGO, so it's not
+  // directly withdrawable here.
+  const withdrawableMicro = algoPos?.principalMicro ?? 0
+  // Your TOTAL ALGO in the pool = wallet Sprout + Sprout staked for voting. Both are
+  // 1:1 claims on your deposited principal; staking Sprout for a vote moves the receipt
+  // to the governance app but doesn't reduce what you have in the pool. Displaying only
+  // the wallet balance made the pooled figure drop whenever Sprout was staked to vote.
+  const algoStakedMicro = withdrawableMicro + sproutStakedMicro
   const hasSprout = sproutStakedMicro > 0
   const ranked = [...candidates].sort((a, b) => b.weightMicro - a.weightMicro)
 
@@ -196,11 +204,16 @@ export default function Participate() {
                   {busy === 'algo-stake' ? 'Staking…' : 'Stake ALGO'}
                 </button>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button className="btn btn-ghost btn-block" disabled={!!busy || algoStakedMicro === 0}
+                  <button className="btn btn-ghost btn-block" disabled={!!busy || withdrawableMicro === 0}
                           onClick={() => doAlgoUnstake(Math.round(Number(algoAmt) * MICRO))}>Unstake</button>
-                  <button className="btn btn-ghost btn-block" disabled={!!busy || algoStakedMicro === 0}
-                          onClick={() => doAlgoUnstake(algoStakedMicro)}>Unstake all</button>
+                  <button className="btn btn-ghost btn-block" disabled={!!busy || withdrawableMicro === 0}
+                          onClick={() => doAlgoUnstake(withdrawableMicro)}>Unstake all</button>
                 </div>
+                {sproutStakedMicro > 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                    {fmtAlgo(sproutStakedMicro / MICRO)} ALGO of your pool is staked for voting — unstake your Sprout below to withdraw it.
+                  </span>
+                )}
               </div>
             </div>
           </section>
