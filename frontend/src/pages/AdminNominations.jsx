@@ -22,18 +22,15 @@ export default function AdminNominations() {
   // signTransactions / addToast change reference each render; read them via refs so the
   // load effect doesn't re-run and trigger an endless signature-prompt loop (same
   // pattern as AdminDirectory).
-  const signRef  = useRef(signTransactions)
   const toastRef = useRef(addToast)
-  useEffect(() => { signRef.current = signTransactions }, [signTransactions])
   useEffect(() => { toastRef.current = addToast }, [addToast])
 
+  // The shortlist is PUBLIC data (no signature), so it loads for anyone, on mount,
+  // regardless of wallet state. Only the reset below needs a connected admin wallet.
   const reload = useCallback(async () => {
-    if (!activeAddress || !isAdmin) { setLoading(false); return }
     setLoading(true)
     try {
-      const { round, top, tie } = await fetchNominationShortlist({
-        address: activeAddress, signTransactions: signRef.current, n: 8,
-      })
+      const { round, top, tie } = await fetchNominationShortlist({ n: 8 })
       setRound(round)
       setTop(Array.isArray(top) ? top : [])
       setTie(!!tie)
@@ -42,18 +39,15 @@ export default function AdminNominations() {
     } finally {
       setLoading(false)
     }
-  }, [activeAddress, isAdmin])
+  }, [])
 
-  useEffect(() => {
-    if (!activeAddress || !isAdmin) { setLoading(false); return }
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAddress, isAdmin])
+  useEffect(() => { reload() }, [reload])
 
   async function doReset() {
+    if (!activeAddress) { addToast('Connect your admin wallet to reset', 'error'); return }
     setResetting(true)
     try {
-      const res = await resetNominations({ address: activeAddress, signTransactions: signRef.current })
+      const res = await resetNominations({ address: activeAddress, signTransactions })
       addToast(`Tally reset — now on round ${res.currentRound}`, 'success')
       setConfirming(false)
       await reload()
@@ -62,13 +56,6 @@ export default function AdminNominations() {
     } finally {
       setResetting(false)
     }
-  }
-
-  if (!activeAddress) {
-    return <div style={{ maxWidth: 760, margin: '0 auto', padding: 24 }}>Connect your admin wallet.</div>
-  }
-  if (!isAdmin) {
-    return <div style={{ maxWidth: 760, margin: '0 auto', padding: 24 }}>Not authorized.</div>
   }
 
   return (
@@ -136,10 +123,11 @@ export default function AdminNominations() {
         <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 0 }}>
           Starts a fresh nomination round. The public tally clears and voters re-nominate.
           Past votes are kept as history (round {round}). Do this after you've registered
-          this round's shortlist on-chain.
+          this round's shortlist on-chain.{' '}
+          {!isAdmin && <strong>Connect the admin wallet to enable this.</strong>}
         </p>
         {!confirming ? (
-          <button className="btn" onClick={() => setConfirming(true)}>Reset tally…</button>
+          <button className="btn" disabled={!isAdmin} onClick={() => setConfirming(true)}>Reset tally…</button>
         ) : (
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 14 }}>Start round {round != null ? round + 1 : '?'}? This clears the live standings.</span>

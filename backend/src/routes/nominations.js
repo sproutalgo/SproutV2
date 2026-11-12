@@ -75,9 +75,11 @@ router.post('/withdraw', requireSignatureGeneric, async (req, res) => {
 
 // ─── Admin ─────────────────────────────────────────────────────────────────────
 
-// GET /api/nominations/admin/top — the top N (default 8) by votes, payout pre-resolved,
-// for the admin to register on-chain.
-router.get('/admin/top', requireAdminGeneric, async (req, res) => {
+// GET /api/nominations/top — the top N (default 8) by votes, payout pre-resolved, for
+// the admin to register on-chain. PUBLIC: this is all public data (vote counts + payout
+// addresses already visible via the directory and /tally), so no signature is required.
+// Only the RESET below mutates state and stays admin-gated.
+router.get('/top', async (req, res) => {
   try {
     const n = Math.min(20, Math.max(1, Number(req.query.n) || 8))
     const result = await getTopN(n)
@@ -88,9 +90,8 @@ router.get('/admin/top', requireAdminGeneric, async (req, res) => {
   }
 })
 
-// GET /api/nominations/admin/round/:n — the results of a PAST (or current) round, for
-// history. Resets don't delete votes, so any round's standings are reconstructable.
-router.get('/admin/round/:n', requireAdminGeneric, async (req, res) => {
+// GET /api/nominations/round/:n — a past (or current) round's results. PUBLIC history.
+router.get('/round/:n', async (req, res) => {
   try {
     const n = Number(req.params.n)
     if (!Number.isInteger(n) || n < 1) return res.status(400).json({ error: 'invalid round' })

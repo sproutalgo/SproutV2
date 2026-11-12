@@ -318,12 +318,19 @@ export async function withdrawNomination({ address, signTransactions }) {
   return authFetch('/nominations/withdraw', { method: 'POST' }, signTransactions, address)
 }
 
-// Admin: the top-N shortlist (default 8) with payout addresses, to register on-chain.
-export async function fetchNominationShortlist({ address, signTransactions, n = 8 }) {
-  return authFetch(`/nominations/admin/top?n=${n}`, { method: 'GET' }, signTransactions, address)
+// Public: the top-N shortlist (default 8) with payout addresses, to register on-chain.
+// No signature — all public data (counts + directory payout addresses).
+export async function fetchNominationShortlist({ n = 8 } = {}) {
+  return apiFetch(`/nominations/top?n=${n}`)
 }
 
-// Admin: start a fresh tally (bump the round) when accepting a shortlist.
+// Public: a past (or current) round's results, for history.
+export async function fetchNominationRoundResults(n) {
+  return apiFetch(`/nominations/round/${n}`)
+}
+
+// Admin: start a fresh tally (bump the round). Signature-verified — this mutates state
+// (clears the live standings for everyone), so it stays admin-gated.
 export async function resetNominations({ address, signTransactions }) {
   return authFetch('/nominations/admin/reset', { method: 'POST' }, signTransactions, address)
 }
