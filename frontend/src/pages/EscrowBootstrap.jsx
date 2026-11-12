@@ -1,3 +1,4 @@
+
 // EscrowBootstrap.jsx — admin-only page to deploy + bootstrap the Staking Escrow.
 //
 // Soft-gated by the obscure route AND by VITE_ADMIN_ADDRESS matching the connected
@@ -126,7 +127,13 @@ export default function EscrowBootstrap() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(PENDING_KEY)
-      if (raw) setPending(JSON.parse(raw))
+      if (raw) {
+        const p = JSON.parse(raw)
+        // Sanitize: older saves may hold an Address OBJECT for appAddress, which would
+        // crash the render (React #31). Coerce to a plain string on load.
+        if (p && p.appAddress && typeof p.appAddress !== 'string') p.appAddress = String(p.appAddress)
+        setPending(p)
+      }
     } catch { /* ignore */ }
   }, [])
 
@@ -174,7 +181,11 @@ export default function EscrowBootstrap() {
       const [sf] = await signTransactions([algosdk.encodeUnsignedTransaction(fund.txn)])
       await sendAndConfirm(algodClient, [sf], fund.txId)
 
-      const appAddress = algosdk.getApplicationAddress(appId)
+      // algosdk v3 returns an Address OBJECT here, not a string. Coerce to string
+      // before storing/rendering — rendering the object (it has a .publicKey field)
+      // throws React error #31 and blanks the page, and it must be a plain string to
+      // round-trip through localStorage.
+      const appAddress = String(algosdk.getApplicationAddress(appId))
       savePending({ appId, appAddress })
       setCreateStep(`Created + funded. Escrow App ID ${appId}.`)
       addToast(`Escrow app ${appId} created + funded. Now deploy governance, then bootstrap below.`, 'success', 10000)
@@ -317,7 +328,7 @@ export default function EscrowBootstrap() {
           ) : (
             <div className="card" style={{ padding: 14, background: 'var(--accent-soft)', borderColor: 'var(--accent-line)' }}>
               <p style={{ margin: '0 0 4px', fontSize: 14 }}><strong>Escrow App ID:</strong> {pending.appId} <span className="badge badge-warn" style={{ marginLeft: 8 }}>awaiting bootstrap</span></p>
-              <p style={{ margin: '0 0 8px', fontSize: 13 }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{pending.appAddress}</code></p>
+              <p style={{ margin: '0 0 8px', fontSize: 13 }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{String(pending.appAddress)}</code></p>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                 Now deploy the governance app, copy its app account address, and bootstrap below.
               </p>
@@ -371,7 +382,7 @@ export default function EscrowBootstrap() {
         <div className="card" style={{ padding: 16, marginTop: 20 }}>
           <h2 style={{ marginTop: 0, fontSize: 18 }}>Bootstrapped ✓</h2>
           <p style={{ fontSize: 14, margin: '4px 0' }}><strong>Escrow App ID:</strong> {result.appId}</p>
-          <p style={{ fontSize: 14, margin: '4px 0' }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{result.appAddress}</code></p>
+          <p style={{ fontSize: 14, margin: '4px 0' }}><strong>App address:</strong> <code style={{ fontSize: 12 }}>{String(result.appAddress)}</code></p>
           <p style={{ fontSize: 14, margin: '4px 0' }}><strong>Sprout ASA ID:</strong> {result.sproutAsaId ?? '(read from the bootstrap txn in an explorer)'}</p>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 10 }}>
             Put these into your env: <code>VITE_ESCROW_APP_ID={result.appId}</code>,{' '}
