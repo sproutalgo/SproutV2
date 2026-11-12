@@ -14,7 +14,7 @@ export default function Landing() {
       <section className="hero wrap">
         <div style={{ maxWidth: 680 }}>
           <h1 style={{ fontSize: 'clamp(40px, 5.4vw, 64px)', lineHeight: 1.05, margin: 0 }}>
-            <span className="accent" style={{ color: 'var(--accent)', fontStyle: 'italic' }}>Algorand's</span> own — grassroots funding platform
+            Algorand's own — <span className="accent" style={{ color: 'var(--accent)', fontStyle: 'italic' }}>grassroots</span> funding platform
           </h1>
           <p className="hero-sub" style={{ maxWidth: 540 }}>
             Back projects you believe in. Stake ALGO to grow a shared prize pool, nominate
