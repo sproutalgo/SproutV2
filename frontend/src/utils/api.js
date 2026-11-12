@@ -281,3 +281,49 @@ export async function setDirectoryEntryStatus({ address, id, status, signTransac
     body: { status },
   }, signTransactions, address)
 }
+
+// ─── Nominations (community shortlist voting) ──────────────────────────────────
+//
+// Off-chain: one wallet = one vote = one directory project, changeable anytime.
+// The public tally feeds the admin a top-8 shortlist to register on-chain, then the
+// admin resets to start a fresh round. Votes are signature-verified (the voter is the
+// cryptographically proven signer), matching the directory admin pattern above.
+
+// Public: the live tally for the current round — every approved project with its vote
+// count, highest first, plus { round, totalVotes }.
+export async function fetchNominationTally() {
+  return apiFetch('/nominations/tally')
+}
+
+// Public: just the current round number (cheap poll to detect a reset).
+export async function fetchNominationRound() {
+  return apiFetch('/nominations/round')
+}
+
+// Public: what a given wallet currently backs this round (null if it hasn't voted).
+export async function fetchMyNomination(address) {
+  return apiFetch(`/nominations/my-vote/${address}`)
+}
+
+// Signature-verified: cast or change this wallet's vote for one project.
+export async function castNomination({ address, directoryEntryId, signTransactions }) {
+  return authFetch('/nominations/vote', {
+    method: 'POST',
+    body: { directoryEntryId },
+  }, signTransactions, address)
+}
+
+// Signature-verified: clear this wallet's vote for the current round.
+export async function withdrawNomination({ address, signTransactions }) {
+  return authFetch('/nominations/withdraw', { method: 'POST' }, signTransactions, address)
+}
+
+// Admin: the top-N shortlist (default 8) with payout addresses, to register on-chain.
+export async function fetchNominationShortlist({ address, signTransactions, n = 8 }) {
+  return authFetch(`/nominations/admin/top?n=${n}`, { method: 'GET' }, signTransactions, address)
+}
+
+// Admin: start a fresh tally (bump the round) when accepting a shortlist.
+export async function resetNominations({ address, signTransactions }) {
+  return authFetch('/nominations/admin/reset', { method: 'POST' }, signTransactions, address)
+}

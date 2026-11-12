@@ -23,6 +23,7 @@ import DirectoryMine   from './pages/DirectoryMine'
 import AdminDirectory  from './pages/AdminDirectory'
 import EscrowBootstrap from './pages/EscrowBootstrap'
 import AdminVoting from './pages/AdminVoting'
+import Nominations from './pages/Nominations'
 
 
 /**
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="/admin/escrow" element={<EscrowBootstrap />} />
             <Route path="/admin/stake" element={<Stake />} />
             <Route path="/admin/voting" element={<AdminVoting />} />
+            <Route path="/nominations" element={<Nominations />} />
             <Route path="/cleanup" element={<CleanupWallet />} />
             <Route path="/faq"     element={<FAQ />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
