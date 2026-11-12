@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ToastProvider } from './context/ToastContext'
 import Layout from './components/Layout'
+import Landing from './pages/Landing'
 import Home from './pages/Home'
 import ProjectDetail from './pages/ProjectDetail'
 import CreateProject from './pages/CreateProject'
@@ -23,8 +24,11 @@ import DirectoryMine   from './pages/DirectoryMine'
 import AdminDirectory  from './pages/AdminDirectory'
 import EscrowBootstrap from './pages/EscrowBootstrap'
 import AdminVoting from './pages/AdminVoting'
-import Nominations from './pages/Nominations'
 import AdminNominations from './pages/AdminNominations'
+// Funding engine (new)
+import Fund        from './pages/Fund'
+import Participate from './pages/Participate'   // combined stake (ALGO + Sprout) + vote
+import Results     from './pages/Results'
 
 
 /**
@@ -70,24 +74,45 @@ export default function App() {
         <ScrollToTop />
         <Layout>
           <Routes>
-            <Route path="/" element={<Home />} />
+            {/* Orientation landing (was Home) */}
+            <Route path="/" element={<Landing />} />
+
+            {/* Crowdfunding (the former home, now its own hub) */}
+            <Route path="/campaigns" element={<Home />} />
             <Route path="/project/demo" element={<DemoProject />} />
             <Route path="/project/:appId" element={<ProjectDetail />} />
             <Route path="/create" element={<CreateProject />} />
             <Route path="/donate-setup" element={<DonationSetup />} />
             <Route path="/my-projects" element={<MyProjects />} />
+
+            {/* Funding engine */}
+            <Route path="/fund" element={<Fund />} />
+            <Route path="/fund/participate" element={<Participate />} />
+            <Route path="/fund/results" element={<Results />} />
+            {/* Back-compat: old split routes resolve to the combined page */}
+            <Route path="/fund/stake" element={<Participate />} />
+            <Route path="/fund/vote" element={<Participate />} />
+
+            {/* Directory (the engine's candidate roster; nominating happens inline here) */}
             <Route path="/directory" element={<Directory />} />
             <Route path="/directory/submit" element={<DirectorySubmit />} />
             <Route path="/directory/mine" element={<DirectoryMine />} />
             <Route path="/directory/:id/edit" element={<DirectorySubmit />} />
             <Route path="/directory/:id" element={<DirectoryEntry />} />
+
+            {/* Standalone nominations page folded into the Directory — redirect any
+                existing links so they land on the new inline experience. */}
+            <Route path="/nominations" element={<Navigate to="/directory" replace />} />
+
+            {/* Admin */}
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/directory" element={<AdminDirectory />} />
             <Route path="/admin/escrow" element={<EscrowBootstrap />} />
             <Route path="/admin/stake" element={<Stake />} />
             <Route path="/admin/voting" element={<AdminVoting />} />
-            <Route path="/nominations" element={<Nominations />} />
             <Route path="/admin/nominations" element={<AdminNominations />} />
+
+            {/* Static / misc */}
             <Route path="/cleanup" element={<CleanupWallet />} />
             <Route path="/faq"     element={<FAQ />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />

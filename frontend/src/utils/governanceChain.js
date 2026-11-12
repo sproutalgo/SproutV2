@@ -334,9 +334,17 @@ export async function fetchGovState() {
       paidCount: out.paid_count ?? 0,
       candidateCount: out.candidate_count ?? 0,
       epochId: out.epoch_id ?? 0,
+      // Epoch window rounds — the UI's cycle-status derivation needs these to tell
+      // nominating / voting / frozen apart within phase 0.
+      voteOpen: out.vote_open ?? 0,
+      voteClose: out.vote_close ?? 0,
+      tallyRound: out.tally_round ?? 0,
     }
   } catch (e) {
-    return { phase: 0, winnerCount: 0, paidCount: 0, candidateCount: 0, epochId: 0 }
+    return {
+      phase: 0, winnerCount: 0, paidCount: 0, candidateCount: 0, epochId: 0,
+      voteOpen: 0, voteClose: 0, tallyRound: 0,
+    }
   }
 }
 
