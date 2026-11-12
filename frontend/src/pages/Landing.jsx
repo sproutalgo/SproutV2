@@ -29,9 +29,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Two paths */}
+      {/* Two paths — capped to the same 680px column as the hero/status above so the
+          left and right edges line up with the status box. */}
       <section className="wrap" style={{ paddingBottom: 24 }}>
-        <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+        <div style={{ maxWidth: 680, display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           {/* Engine */}
           <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <h2 style={{ margin: 0, fontSize: 26 }}>Fund &amp; direct the pool</h2>
@@ -62,7 +63,7 @@ export default function Landing() {
 
       {/* How the pool works */}
       <section className="wrap" style={{ paddingBottom: 64 }}>
-        <div className="card" style={{ padding: 28 }}>
+        <div className="card" style={{ maxWidth: 680, padding: 28 }}>
           <h3 style={{ margin: '0 0 16px', fontSize: 20 }}>How the pool works</h3>
           <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
             {[
