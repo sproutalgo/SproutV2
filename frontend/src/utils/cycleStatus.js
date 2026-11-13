@@ -8,6 +8,14 @@
 // helpers here are the one translation the whole UI depends on.
 
 import { fetchGovState, fetchPool } from './governanceChain'
+import { fetchEscrowStats } from './stakingChain'
+
+// Mirrors the escrow contract's ADMIN_FEE_BPS: on harvest, 10% of the reward surplus
+// goes to the admin and 90% to the governance pool. The displayed prize pool should
+// include the 90% of the escrow's not-yet-harvested surplus, since that ALGO is already
+// earmarked for the pool — only a permissionless harvest call is pending.
+const POOL_SHARE_BPS = 9_000
+const BPS_DENOM = 10_000
 import { fetchNominationRound } from './api'
 import { algodClient } from './algorand'
 
@@ -116,8 +124,22 @@ export async function fetchCycleStatus() {
     out.rawPhase = gov.phase ?? 0
   } catch { out.ok = false }
 
-  // Pool.
-  try { out.poolMicro = Number(await fetchPool()) || 0 } catch { /* 0 */ }
+  // Pool. The true prize pool = ALGO already harvested into the governance pool PLUS
+  // the pool's 90% share of the escrow's unharvested reward surplus (which lands in the
+  // pool on the next harvest). Counting only the governance balance understated the pool
+  // between harvests. Each piece is best-effort — if the escrow read fails we still show
+  // the harvested portion rather than nothing.
+  let harvestedMicro = 0
+  let pendingPoolMicro = 0
+  try { harvestedMicro = Number(await fetchPool()) || 0 } catch { /* 0 */ }
+  try {
+    const stats = await fetchEscrowStats()
+    const surplus = Number(stats?.surplusMicro) || 0
+    pendingPoolMicro = Math.floor((surplus * POOL_SHARE_BPS) / BPS_DENOM)
+  } catch { /* 0 — show harvested only */ }
+  out.poolMicro = harvestedMicro + pendingPoolMicro
+  out.harvestedPoolMicro = harvestedMicro
+  out.pendingPoolMicro = pendingPoolMicro
 
   // Nomination round.
   try {
