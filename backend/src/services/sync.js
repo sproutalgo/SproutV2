@@ -14,7 +14,7 @@
  */
 
 import { supabase }               from '../utils/supabase.js'
-import { algodClient, decodeGlobalState } from '../utils/algorand.js'
+import { algodClient, decodeGlobalState, getCurrentRound } from '../utils/algorand.js'
 
 const BATCH_SIZE = 10
 
@@ -25,11 +25,8 @@ const BATCH_SIZE = 10
 export async function syncSingleProject(appId) {
   try {
     const result = await fetchAndDecode(appId)
-    let currentRound = 0
-    try {
-      const status = await algodClient.status().do()
-      currentRound = Number(status['last-round'] ?? status.lastRound ?? 0)
-    } catch { /* non-critical */ }
+    // Breakered cached round (0 if the node is unavailable — non-critical here).
+    const currentRound = await getCurrentRound()
     await upsertOnChain(appId, result, currentRound)
   } catch (e) {
     console.error(`[sync] Failed to sync app ${appId}:`, e.message)
@@ -54,13 +51,14 @@ export async function syncAllProjects() {
     if (error) throw error
     if (!projects?.length) return
 
-    // Fetch current round ONCE per sync cycle — not per project
-    let currentRound = 0
-    try {
-      const status = await algodClient.status().do()
-      currentRound = Number(status['last-round'] ?? status.lastRound ?? 0)
-    } catch (e) {
-      console.warn('[sync] Could not fetch current round:', e.message)
+    // Fetch current round ONCE per sync cycle, via the breakered cache. If this comes
+    // back 0 the node is unreachable (breaker tripped) — skip the whole cycle rather
+    // than firing a batch of per-app calls that will all 403 and burn quota. This is
+    // what stops a failing node from being hammered 19× every cycle.
+    const currentRound = await getCurrentRound()
+    if (!currentRound) {
+      console.warn('[sync] Node unavailable (breaker tripped) — skipping this cycle')
+      return
     }
 
     // Process in batches to avoid overwhelming algod

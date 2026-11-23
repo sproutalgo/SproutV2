@@ -75,6 +75,14 @@ export async function algodHealthy() {
   return r > 0
 }
 
+/** True when the circuit breaker is currently tripped (a recent node call failed and
+ *  we're in cooldown). Callers that make their OWN node requests — e.g. the sync job's
+ *  per-app getApplicationByID — check this and skip entirely rather than firing a batch
+ *  of doomed calls that burn quota. */
+export function isNodeInCooldown() {
+  return Date.now() < _breakerUntil
+}
+
 // ─── State decoders (mirrors frontend algorand.js) ───────────────────────────
 
 function decodeKey(raw) {
