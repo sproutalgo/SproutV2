@@ -14,37 +14,53 @@ export const indexerClient = new algosdk.Indexer(
 
 export const ADMIN_ADDRESS = process.env.ADMIN_ADDRESS || ''
 
-// ─── Cached current round ────────────────────────────────────────────────────
-// Per-request algod.status() calls (auth verification, health checks) were the main
-// driver of node traffic — enough to blow past the free node tier's daily quota and
-// get the whole backend 403'd. The round only advances ~every 2.8s, so one cached
-// value refreshed on a short TTL serves every caller. This collapses thousands of
-// status() calls into a handful per minute.
-const ROUND_TTL_MS = 10_000   // refresh at most every 10s (round moves ~2.8s; 10s is plenty for a validity-window check)
+// ─── Cached current round + circuit breaker ──────────────────────────────────
+// Per-request algod.status() calls (auth, health) were flooding the node and blowing
+// past the free tier's daily quota, getting the whole IP 403'd. Two protections:
+//
+//  1. CACHE: the round advances ~every 2.8s, so one value on a short TTL serves all
+//     callers — collapsing thousands of status() calls into a handful per minute.
+//
+//  2. CIRCUIT BREAKER: if a fetch FAILS (e.g. the node 403s us), we stop hitting the
+//     node for a cooldown window. Without this, a cold cache under sustained failure
+//     re-fetches on every call (the cache only throttles once it holds a good value),
+//     so a flood of callers becomes a flood of node requests — exactly the runaway that
+//     exhausted the quota. The breaker caps node attempts to ~one per cooldown no matter
+//     how many callers arrive, so a bad provider can never be hammered.
+const ROUND_TTL_MS      = 10_000   // serve a cached round for 10s between refreshes
+const BREAKER_COOLDOWN_MS = 30_000 // after a failure, don't touch the node for 30s
 let _roundCache = { round: 0, at: 0 }
 let _roundInFlight = null
+let _breakerUntil = 0              // timestamp until which the node is considered "open/failing"
 
 /**
- * Current round, served from a short-lived cache. Falls back to the last known value
- * if a refresh fails (so a transient node hiccup doesn't break auth). Concurrent callers
- * share a single in-flight fetch rather than each hitting the node.
+ * Current round, served from cache, guarded by a circuit breaker. Returns the last known
+ * round (or 0) without touching the node while the breaker is tripped, so repeated
+ * callers during an outage generate no node traffic.
  */
 export async function getCurrentRound() {
   const now = Date.now()
+  // Fresh cached value — serve it.
   if (now - _roundCache.at < ROUND_TTL_MS && _roundCache.round > 0) {
     return _roundCache.round
   }
+  // Breaker tripped — do NOT hit the node; serve last known (may be 0).
+  if (now < _breakerUntil) {
+    return _roundCache.round
+  }
+  // Coalesce concurrent refreshes into one fetch.
   if (_roundInFlight) return _roundInFlight
   _roundInFlight = (async () => {
     try {
       const status = await algodClient.status().do()
       const round = Number(status['last-round'] ?? status.lastRound ?? 0)
       if (round > 0) _roundCache = { round, at: Date.now() }
+      _breakerUntil = 0            // success — clear the breaker
       return _roundCache.round
-    } catch (e) {
-      // Keep serving the last known round rather than failing the caller.
-      if (_roundCache.round > 0) return _roundCache.round
-      throw e
+    } catch {
+      // Failure — trip the breaker so we stop hammering a rejecting/broken node.
+      _breakerUntil = Date.now() + BREAKER_COOLDOWN_MS
+      return _roundCache.round     // serve last known (0 if never succeeded); never throw
     } finally {
       _roundInFlight = null
     }
@@ -52,15 +68,11 @@ export async function getCurrentRound() {
   return _roundInFlight
 }
 
-/** Lightweight algod reachability check for /health, served from the round cache so a
- *  health poll never hits the node directly. Returns true if we have a recent round. */
+/** Reachability check for /health, served from the round cache + breaker — a health
+ *  poll never hits the node directly and never during a breaker cooldown. */
 export async function algodHealthy() {
-  try {
-    const r = await getCurrentRound()
-    return r > 0
-  } catch {
-    return false
-  }
+  const r = await getCurrentRound()
+  return r > 0
 }
 
 // ─── State decoders (mirrors frontend algorand.js) ───────────────────────────
