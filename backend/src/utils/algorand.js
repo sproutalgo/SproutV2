@@ -1,13 +1,49 @@
 import algosdk from 'algosdk'
 
+// Token can be sent two ways depending on the provider:
+//   • Default (Nodely/AlgoNode): algosdk sends the token as the `X-Algo-API-Token`
+//     header. A bare string token (or empty for keyless) does this.
+//   • Header-key providers (Tatum, NowNodes): the key goes in `x-api-key`. Set
+//     ALGOD_TOKEN_HEADER=x-api-key and algosdk sends the token under that header
+//     instead. This lets us switch providers with env vars, no code change.
+function buildToken(tokenEnv, headerEnv) {
+  const token = tokenEnv || ''
+  const header = headerEnv || ''
+  if (token && header) return { [header]: token }   // custom-header providers
+  return token                                        // default X-Algo-API-Token (or keyless '')
+}
+
+// ─── Node-call counter ───────────────────────────────────────────────────────
+// Ongoing visibility: count every algod request and log the rate once a minute, so a
+// traffic spike (like the one that exhausted the free quota) is obvious in the logs
+// immediately instead of being discovered only when the node starts 403ing. The count
+// is incremented by the breakered helpers and by the sync job's fetchAndDecode — i.e.
+// the two real call sites — via recordAlgodCall().
+let _algodCallCount = 0
+let _algodCallWindowStart = Date.now()
+export function recordAlgodCall(n = 1) { _algodCallCount += n }
+
+// Log the rate every 60s (only when non-zero, so idle periods stay quiet). unref() so
+// this timer never keeps the process alive on its own.
+const _callLogTimer = setInterval(() => {
+  if (_algodCallCount > 0) {
+    const secs = Math.max(1, (Date.now() - _algodCallWindowStart) / 1000)
+    const perSec = (_algodCallCount / secs).toFixed(2)
+    console.log(`[algod] ${_algodCallCount} node calls in last ${Math.round(secs)}s (${perSec}/s)`)
+  }
+  _algodCallCount = 0
+  _algodCallWindowStart = Date.now()
+}, 60_000)
+if (_callLogTimer.unref) _callLogTimer.unref()
+
 export const algodClient = new algosdk.Algodv2(
-  process.env.ALGOD_TOKEN  || '',
+  buildToken(process.env.ALGOD_TOKEN, process.env.ALGOD_TOKEN_HEADER),
   process.env.ALGOD_SERVER || 'https://testnet-api.algonode.cloud',
   process.env.ALGOD_PORT   || ''
 )
 
 export const indexerClient = new algosdk.Indexer(
-  process.env.INDEXER_TOKEN  || '',
+  buildToken(process.env.INDEXER_TOKEN, process.env.INDEXER_TOKEN_HEADER),
   process.env.INDEXER_SERVER || 'https://testnet-idx.algonode.cloud',
   process.env.INDEXER_PORT   || ''
 )
@@ -52,6 +88,7 @@ export async function getCurrentRound() {
   if (_roundInFlight) return _roundInFlight
   _roundInFlight = (async () => {
     try {
+      recordAlgodCall()
       const status = await algodClient.status().do()
       const round = Number(status['last-round'] ?? status.lastRound ?? 0)
       if (round > 0) _roundCache = { round, at: Date.now() }
@@ -131,6 +168,7 @@ export function decodeGlobalState(gs = []) {
  */
 export async function fetchAppGlobalState(appId) {
   try {
+    recordAlgodCall()
     const info = await algodClient.getApplicationByID(Number(appId)).do()
     const rawGs = info.params?.['global-state'] ?? info.params?.globalState ?? []
     const gs = decodeGlobalState(rawGs)

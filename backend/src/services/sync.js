@@ -14,7 +14,7 @@
  */
 
 import { supabase }               from '../utils/supabase.js'
-import { algodClient, decodeGlobalState, getCurrentRound } from '../utils/algorand.js'
+import { algodClient, decodeGlobalState, getCurrentRound, recordAlgodCall } from '../utils/algorand.js'
 
 const BATCH_SIZE = 10
 
@@ -37,7 +37,19 @@ export async function syncSingleProject(appId) {
  * Sync all non-closed projects.
  * Called by the cron job every 2 minutes.
  */
+// Re-entrancy guard. If a cycle is already running, a new invocation is a no-op. This
+// prevents the vicious cycle that caused the node-quota blowout: when the node 403s,
+// each cycle fails fast (~1s instead of its usual duration), so the cron's firings — or
+// any duplicate scheduler/instance — overlap and stack into dozens of cycles per second,
+// each making a burst of node calls. One-at-a-time execution makes that impossible.
+let _syncRunning = false
+
 export async function syncAllProjects() {
+  if (_syncRunning) {
+    console.warn('[sync] Previous cycle still running — skipping this invocation')
+    return
+  }
+  _syncRunning = true
   const started = Date.now()
   let synced = 0, failed = 0, deleted = 0
 
@@ -81,6 +93,8 @@ export async function syncAllProjects() {
     console.log(`[sync] Complete — ${synced} synced, ${deleted} deleted, ${failed} failed (${elapsed}s)`)
   } catch (e) {
     console.error('[sync] Sync job error:', e.message)
+  } finally {
+    _syncRunning = false
   }
 }
 
@@ -90,6 +104,7 @@ export async function syncAllProjects() {
  */
 async function fetchAndDecode(appId) {
   try {
+    recordAlgodCall()
     const info   = await algodClient.getApplicationByID(Number(appId)).do()
     const rawGs  = info.params?.['global-state'] ?? info.params?.globalState ?? []
     const gs     = decodeGlobalState(rawGs)
