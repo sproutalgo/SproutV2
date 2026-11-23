@@ -6,6 +6,11 @@ export const algodClient = new algosdk.Algodv2(
   process.env.ALGOD_PORT   || ''
 )
 
+// ── TEMP DEBUG: confirm which algod the backend actually booted with ──
+console.log('[algod] server =', process.env.ALGOD_SERVER || 'https://testnet-api.algonode.cloud (DEFAULT)')
+console.log('[algod] token set =', !!process.env.ALGOD_TOKEN)
+// ──────────────────────────────────────────────────────────────────────
+
 export const indexerClient = new algosdk.Indexer(
   process.env.INDEXER_TOKEN  || '',
   process.env.INDEXER_SERVER || 'https://testnet-idx.algonode.cloud',
