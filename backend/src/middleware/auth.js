@@ -1,6 +1,6 @@
 import algosdk from 'algosdk'
 import nacl from 'tweetnacl'
-import { ADMIN_ADDRESS, algodClient } from '../utils/algorand.js'
+import { ADMIN_ADDRESS, algodClient, getCurrentRound } from '../utils/algorand.js'
 
 /**
  * Verify a dummy auth transaction signed by an Algorand wallet.
@@ -82,9 +82,9 @@ export async function verifyAuthTransaction({ address, signedTxnB64, firstValid,
       return { ok: false, reason: `Note mismatch. Got: "${noteText}", expected: "${expectedNote}"` }
     }
 
-    // 5. Within validity window
-    const status       = await algodClient.status().do()
-    const currentRound = Number(status['last-round'] ?? status.lastRound ?? 0)
+    // 5. Within validity window. Use the cached round (not a per-request status() call,
+    // which previously hammered the node on every authenticated request).
+    const currentRound = await getCurrentRound()
     const lastValid    = Number(txn.lastValid)
     if (currentRound > lastValid) {
       return { ok: false, reason: `Auth transaction expired (current: ${currentRound}, lastValid: ${lastValid})` }

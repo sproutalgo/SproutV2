@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { supabase } from '../utils/supabase.js'
-import { algodClient } from '../utils/algorand.js'
+import { algodHealthy } from '../utils/algorand.js'
 
 const router = Router()
 
@@ -15,10 +15,9 @@ router.get('/', async (req, res) => {
     checks.db = `error: ${e.message}`
   }
 
-  // Check algod
+  // Check algod — via the cached round, so a health poll never hits the node directly.
   try {
-    const status = await algodClient.status().do()
-    checks.algod = status ? 'ok' : 'error'
+    checks.algod = (await algodHealthy()) ? 'ok' : 'error'
   } catch (e) {
     checks.algod = `error: ${e.message}`
   }

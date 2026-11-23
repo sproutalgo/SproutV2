@@ -6,11 +6,6 @@ export const algodClient = new algosdk.Algodv2(
   process.env.ALGOD_PORT   || ''
 )
 
-// ── TEMP DEBUG: confirm which algod the backend actually booted with ──
-console.log('[algod] server =', process.env.ALGOD_SERVER || 'https://testnet-api.algonode.cloud (DEFAULT)')
-console.log('[algod] token set =', !!process.env.ALGOD_TOKEN)
-// ──────────────────────────────────────────────────────────────────────
-
 export const indexerClient = new algosdk.Indexer(
   process.env.INDEXER_TOKEN  || '',
   process.env.INDEXER_SERVER || 'https://testnet-idx.algonode.cloud',
@@ -18,6 +13,55 @@ export const indexerClient = new algosdk.Indexer(
 )
 
 export const ADMIN_ADDRESS = process.env.ADMIN_ADDRESS || ''
+
+// ─── Cached current round ────────────────────────────────────────────────────
+// Per-request algod.status() calls (auth verification, health checks) were the main
+// driver of node traffic — enough to blow past the free node tier's daily quota and
+// get the whole backend 403'd. The round only advances ~every 2.8s, so one cached
+// value refreshed on a short TTL serves every caller. This collapses thousands of
+// status() calls into a handful per minute.
+const ROUND_TTL_MS = 10_000   // refresh at most every 10s (round moves ~2.8s; 10s is plenty for a validity-window check)
+let _roundCache = { round: 0, at: 0 }
+let _roundInFlight = null
+
+/**
+ * Current round, served from a short-lived cache. Falls back to the last known value
+ * if a refresh fails (so a transient node hiccup doesn't break auth). Concurrent callers
+ * share a single in-flight fetch rather than each hitting the node.
+ */
+export async function getCurrentRound() {
+  const now = Date.now()
+  if (now - _roundCache.at < ROUND_TTL_MS && _roundCache.round > 0) {
+    return _roundCache.round
+  }
+  if (_roundInFlight) return _roundInFlight
+  _roundInFlight = (async () => {
+    try {
+      const status = await algodClient.status().do()
+      const round = Number(status['last-round'] ?? status.lastRound ?? 0)
+      if (round > 0) _roundCache = { round, at: Date.now() }
+      return _roundCache.round
+    } catch (e) {
+      // Keep serving the last known round rather than failing the caller.
+      if (_roundCache.round > 0) return _roundCache.round
+      throw e
+    } finally {
+      _roundInFlight = null
+    }
+  })()
+  return _roundInFlight
+}
+
+/** Lightweight algod reachability check for /health, served from the round cache so a
+ *  health poll never hits the node directly. Returns true if we have a recent round. */
+export async function algodHealthy() {
+  try {
+    const r = await getCurrentRound()
+    return r > 0
+  } catch {
+    return false
+  }
+}
 
 // ─── State decoders (mirrors frontend algorand.js) ───────────────────────────
 
