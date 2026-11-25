@@ -200,19 +200,33 @@ export function isAdminAddress(address) {
 const ACCT_TTL_MS = 60_000
 const _acctCache = new Map()   // address -> { data, at }
 
+// Base URL + headers for raw algod REST calls, derived from the same env the client uses.
+const _algodBase = (process.env.ALGOD_SERVER || 'https://testnet-api.algonode.cloud').replace(/\/$/, '')
+function _algodHeaders() {
+  const token = process.env.ALGOD_TOKEN || ''
+  const header = process.env.ALGOD_TOKEN_HEADER || 'X-Algo-API-Token'
+  return token ? { [header]: token } : {}
+}
+
+/**
+ * Fetch an account's info as RAW algod JSON (not via algosdk's typed client, which
+ * renames/decodes fields — that was dropping `auth-addr`, breaking rekeyed-wallet auth).
+ * Returns the parsed JSON object with the chain's own field names (`auth-addr`, etc.),
+ * cached per address. Breaker-aware; returns last-known (or null) during a cooldown.
+ */
 export async function fetchAccountCached(address) {
   const now = Date.now()
   const hit = _acctCache.get(address)
   if (hit && now - hit.at < ACCT_TTL_MS) return hit.data
-  if (isNodeInCooldown()) return hit?.data ?? null   // breaker open — don't hit the node
+  if (isNodeInCooldown()) return hit?.data ?? null
   try {
     recordAlgodCall()
-    const data = await algodClient.accountInformation(address).do()
+    const res = await fetch(`${_algodBase}/v2/accounts/${address}`, { headers: _algodHeaders() })
+    if (!res.ok) throw new Error(`algod ${res.status}`)
+    const data = await res.json()
     _acctCache.set(address, { data, at: Date.now() })
     return data
   } catch {
-    // On failure, trip nothing extra here (getCurrentRound owns the breaker); serve
-    // last-known if we have it, else null so the caller falls back to the sender key.
     return hit?.data ?? null
   }
 }
