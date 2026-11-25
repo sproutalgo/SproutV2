@@ -56,27 +56,35 @@ export async function verifyAuthTransaction({ address, signedTxnB64, firstValid,
       }
 
       let signerPubKey = txn.sender.publicKey
-      let rekeyed = false
+      let authAddr = null
       try {
         const acct = await fetchAccount(senderAddrEarly)
-        const authAddr = acct?.['auth-addr'] ?? acct?.authAddr
-        if (authAddr) {
-          signerPubKey = algosdk.decodeAddress(authAddr).publicKey
-          rekeyed = true
+        // The auth-addr (set when an account is rekeyed) comes back under different keys
+        // depending on the provider / algosdk version: 'auth-addr' (algod REST JSON),
+        // 'authAddr' (camelCase), or 'auth-address'. Normalize across all of them.
+        const raw = acct?.['auth-addr'] ?? acct?.authAddr ?? acct?.['auth-address'] ?? null
+        // The value may already be a string address, OR an Address instance / byte array
+        // (algosdk-decoded). Coerce to a string address.
+        if (raw) {
+          if (typeof raw === 'string') authAddr = raw
+          else if (raw.publicKey) authAddr = algosdk.encodeAddress(raw.publicKey)
+          else if (raw instanceof Uint8Array && raw.length === 32) authAddr = algosdk.encodeAddress(raw)
+          else authAddr = String(raw)
         }
-      } catch {
-        // If we can't fetch the account (node hiccup), fall back to the sender key —
-        // a non-rekeyed account (the common case) still verifies correctly.
+        if (authAddr) signerPubKey = algosdk.decodeAddress(authAddr).publicKey
+      } catch (e) {
+        console.warn(`[auth] auth-addr lookup failed for ${senderAddrEarly}: ${e.message}`)
+        // Fall back to the sender key — a non-rekeyed account still verifies correctly.
       }
 
       let valid = nacl.sign.detached.verify(toVerify, sig, signerPubKey)
-      // If a rekeyed-account verification fails, try the sender's own key too, in case
-      // the auth-addr lookup was stale — belt and suspenders, never the reverse.
-      if (!valid && rekeyed) {
+      // If verification against the auth-addr fails, try the sender's own key too (in case
+      // the lookup was stale or the account un-rekeyed since) — belt and suspenders.
+      if (!valid && authAddr) {
         valid = nacl.sign.detached.verify(toVerify, sig, txn.sender.publicKey)
       }
       if (!valid) {
-        console.warn(`[auth] sig invalid for ${senderAddrEarly}${rekeyed ? ' (rekeyed)' : ''}`)
+        console.warn(`[auth] sig invalid for ${senderAddrEarly} — authAddr=${authAddr || '(none found)'}`)
         return { ok: false, reason: 'Transaction signature invalid' }
       }
     } else if (stxn.msig) {
