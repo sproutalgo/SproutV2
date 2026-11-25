@@ -1,6 +1,9 @@
 import algosdk from 'algosdk'
 import nacl from 'tweetnacl'
-import { ADMIN_ADDRESS, algodClient, getCurrentRound } from '../utils/algorand.js'
+import { ADMIN_ADDRESS, algodClient, getCurrentRound, fetchAccountCached } from '../utils/algorand.js'
+
+// Alias so the verification reads naturally.
+const fetchAccount = fetchAccountCached
 
 /**
  * Verify a dummy auth transaction signed by an Algorand wallet.
@@ -28,24 +31,94 @@ export async function verifyAuthTransaction({ address, signedTxnB64, firstValid,
     const stxn = algosdk.decodeSignedTransaction(sigBytes)
     const txn  = stxn.txn  // algosdk v3 Transaction instance
 
-    // 1. Verify Ed25519 signature.
-    //    Algorand signs: "TX" || msgpack(txn)
-    //    txn.toByte() returns the raw msgpack bytes.
+    // 1. Verify the signature. Algorand signs "TX" || msgpack(txn); txn.toByte() gives
+    //    the msgpack bytes. The signing KEY is NOT always the sender's own key:
+    //      • plain account  → signed by the sender's key (stxn.sig vs sender.publicKey)
+    //      • REKEYED account → signed by the account's auth-addr key, which differs from
+    //        the sender. Verifying against sender.publicKey wrongly rejects these — the
+    //        cause of "signature invalid" for users who have rekeyed their wallet.
+    //      • MULTISIG        → signature lives in stxn.msig, not stxn.sig.
+    //    We handle all three, and log the specific reason so failures are diagnosable.
     const TX_TAG   = new TextEncoder().encode('TX')
     const rawTxn   = txn.toByte()
     const toVerify = new Uint8Array(TX_TAG.length + rawTxn.length)
     toVerify.set(TX_TAG, 0)
     toVerify.set(rawTxn, TX_TAG.length)
 
-    const sig = stxn.sig
-    if (!sig || sig.length !== 64) {
-      return { ok: false, reason: 'Missing or malformed signature' }
-    }
-    // algosdk v3: sender is an Address instance with .publicKey Uint8Array
-    const pubKey = txn.sender.publicKey
-    const valid  = nacl.sign.detached.verify(toVerify, sig, pubKey)
-    if (!valid) {
-      return { ok: false, reason: 'Transaction signature invalid' }
+    const senderAddrEarly = algosdk.encodeAddress(txn.sender.publicKey)
+
+    if (stxn.sig) {
+      // Single-signature. The signer's key is the account's auth-addr if rekeyed, else
+      // the sender's own key. Fetch the on-chain auth-addr and verify against it.
+      const sig = stxn.sig
+      if (sig.length !== 64) {
+        return { ok: false, reason: 'Malformed signature (wrong length)' }
+      }
+
+      let signerPubKey = txn.sender.publicKey
+      let rekeyed = false
+      try {
+        const acct = await fetchAccount(senderAddrEarly)
+        const authAddr = acct?.['auth-addr'] ?? acct?.authAddr
+        if (authAddr) {
+          signerPubKey = algosdk.decodeAddress(authAddr).publicKey
+          rekeyed = true
+        }
+      } catch {
+        // If we can't fetch the account (node hiccup), fall back to the sender key —
+        // a non-rekeyed account (the common case) still verifies correctly.
+      }
+
+      let valid = nacl.sign.detached.verify(toVerify, sig, signerPubKey)
+      // If a rekeyed-account verification fails, try the sender's own key too, in case
+      // the auth-addr lookup was stale — belt and suspenders, never the reverse.
+      if (!valid && rekeyed) {
+        valid = nacl.sign.detached.verify(toVerify, sig, txn.sender.publicKey)
+      }
+      if (!valid) {
+        console.warn(`[auth] sig invalid for ${senderAddrEarly}${rekeyed ? ' (rekeyed)' : ''}`)
+        return { ok: false, reason: 'Transaction signature invalid' }
+      }
+    } else if (stxn.msig) {
+      // Multisig: verify that a threshold of the listed subsignatures are valid over the
+      // transaction bytes. Reconstruct the multisig address and confirm it matches the
+      // sender (so the msig actually controls the account), then count valid subsigs.
+      const msig = stxn.msig
+      const version = Number(msig.v ?? msig.version)
+      const threshold = Number(msig.thr ?? msig.threshold)
+      const subsigs = msig.subsig ?? msig.subsigs ?? []
+      const pks = subsigs.map(s => s.pk ?? s.pubkey)
+      try {
+        const mparams = { version, threshold, addrs: pks.map(pk => algosdk.encodeAddress(pk)) }
+        const msigAddr = algosdk.multisigAddress(mparams)
+        // The controlling address is the auth-addr if rekeyed, else the sender.
+        let controller = senderAddrEarly
+        try {
+          const acct = await fetchAccount(senderAddrEarly)
+          const authAddr = acct?.['auth-addr'] ?? acct?.authAddr
+          if (authAddr) controller = authAddr
+        } catch { /* fall back to sender */ }
+        if (msigAddr !== controller) {
+          return { ok: false, reason: 'Multisig address does not control the account' }
+        }
+      } catch (e) {
+        return { ok: false, reason: `Multisig verification error: ${e.message}` }
+      }
+      let validCount = 0
+      for (const s of subsigs) {
+        const subSig = s.s ?? s.sig
+        const pk = s.pk ?? s.pubkey
+        if (subSig && subSig.length === 64 && nacl.sign.detached.verify(toVerify, subSig, pk)) {
+          validCount++
+        }
+      }
+      if (validCount < threshold) {
+        console.warn(`[auth] multisig threshold not met for ${senderAddrEarly}: ${validCount}/${threshold}`)
+        return { ok: false, reason: 'Multisig signature threshold not met' }
+      }
+    } else {
+      // Logic-sig or no signature — not supported for wallet auth.
+      return { ok: false, reason: 'Unsupported signature type (expected single or multisig)' }
     }
 
     // 2. rekeyTo must be absent or zero (prevent rekeying via auth txn)

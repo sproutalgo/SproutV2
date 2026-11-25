@@ -191,3 +191,28 @@ export async function fetchAppGlobalState(appId) {
 export function isAdminAddress(address) {
   return address && ADMIN_ADDRESS && address === ADMIN_ADDRESS
 }
+
+// ─── Cached account lookup (for auth: rekey/auth-addr) ────────────────────────
+// Auth verification needs an account's auth-addr to validate rekeyed-wallet signatures.
+// The auth-addr changes only when the user rekeys (rare), so a short per-address cache
+// keeps auth from making a node call on every request. Respects the circuit breaker:
+// during a node cooldown it returns the last cached value (or null), never hammering.
+const ACCT_TTL_MS = 60_000
+const _acctCache = new Map()   // address -> { data, at }
+
+export async function fetchAccountCached(address) {
+  const now = Date.now()
+  const hit = _acctCache.get(address)
+  if (hit && now - hit.at < ACCT_TTL_MS) return hit.data
+  if (isNodeInCooldown()) return hit?.data ?? null   // breaker open — don't hit the node
+  try {
+    recordAlgodCall()
+    const data = await algodClient.accountInformation(address).do()
+    _acctCache.set(address, { data, at: Date.now() })
+    return data
+  } catch {
+    // On failure, trip nothing extra here (getCurrentRound owns the breaker); serve
+    // last-known if we have it, else null so the caller falls back to the sender key.
+    return hit?.data ?? null
+  }
+}
