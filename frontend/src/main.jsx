@@ -7,11 +7,12 @@ import './index.css'
 
 inject()
 
-// Pin the MAINNET algod node explicitly. Without an explicit networks/algod config,
-// use-wallet falls back to built-in defaults, and some wallets (notably Lute) derive
-// their displayed network from the active node's genesis — which can mislabel the
-// connection as TestNet. Declaring the mainnet node here makes the network unambiguous
-// so Lute's connect screen shows MainNet.
+// In use-wallet v4 the key is `defaultNetwork` (NOT `network`). The old `network` key was
+// silently ignored, so the manager fell back to its documented default of 'testnet' —
+// which is why Lute's connect screen showed TestNet. Setting `defaultNetwork` to MAINNET
+// fixes it, while keeping use-wallet's built-in network definitions intact (so testnet,
+// mainnet, etc. all remain configured — a custom `networks` object that omitted testnet
+// is what caused the "Network testnet not found" crash).
 const walletManager = new WalletManager({
   wallets: [
     {
@@ -28,15 +29,6 @@ const walletManager = new WalletManager({
     },
   ],
   defaultNetwork: NetworkId.MAINNET,
-  networks: {
-    [NetworkId.MAINNET]: {
-      algod: {
-        baseServer: 'https://mainnet-api.4160.nodely.dev',
-        port: '443',
-        token: '',
-      },
-    },
-  },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
