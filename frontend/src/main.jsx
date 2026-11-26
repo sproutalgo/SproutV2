@@ -7,6 +7,11 @@ import './index.css'
 
 inject()
 
+// Pin the MAINNET algod node explicitly. Without an explicit networks/algod config,
+// use-wallet falls back to built-in defaults, and some wallets (notably Lute) derive
+// their displayed network from the active node's genesis — which can mislabel the
+// connection as TestNet. Declaring the mainnet node here makes the network unambiguous
+// so Lute's connect screen shows MainNet.
 const walletManager = new WalletManager({
   wallets: [
     {
@@ -22,7 +27,16 @@ const walletManager = new WalletManager({
       options: { siteName: 'Sprout' },
     },
   ],
-  network: NetworkId.MAINNET,
+  defaultNetwork: NetworkId.MAINNET,
+  networks: {
+    [NetworkId.MAINNET]: {
+      algod: {
+        baseServer: 'https://mainnet-api.4160.nodely.dev',
+        port: '443',
+        token: '',
+      },
+    },
+  },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
