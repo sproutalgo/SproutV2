@@ -16,7 +16,23 @@
 import { supabase }               from '../utils/supabase.js'
 import { algodClient, decodeGlobalState, getCurrentRound, recordAlgodCall } from '../utils/algorand.js'
 
-const BATCH_SIZE = 10
+// Pacing for the per-app algod reads. Free node tiers cap requests per SECOND
+// (Tatum free = 3/s) and 429 on bursts. We send BATCH_SIZE calls, then pause
+// BATCH_PAUSE_MS before the next batch so the per-second bucket can't overfill.
+//
+// Worst case to defend against: algod responds instantly, so batches start every
+// BATCH_PAUSE_MS. The number of batch-starts that can fall inside any 1s window is
+// ceil(1000 / BATCH_PAUSE_MS), so the true peak rate is:
+//     peak/s = ceil(1000 / BATCH_PAUSE_MS) * BATCH_SIZE
+// With BATCH_SIZE=1 and BATCH_PAUSE_MS=350 → ceil(1000/350)=3 → peak 3/s, i.e. AT the
+// cap, never over it. A ~19-app sweep then takes ~19*0.35 ≈ 7s — negligible against the
+// 5-minute cadence. Both are env-overridable; if you move to a provider with a higher
+// per-second cap, raise SYNC_BATCH_SIZE and/or lower the pause, keeping the formula
+// above at or below that cap.
+const BATCH_SIZE     = Number(process.env.SYNC_BATCH_SIZE) || 1
+const BATCH_PAUSE_MS = Number(process.env.SYNC_BATCH_PAUSE_MS) || 350
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 /**
  * Sync on-chain state for a single app ID.
@@ -115,7 +131,10 @@ export async function syncAllProjects() {
       return
     }
 
-    // Process in batches to avoid overwhelming algod
+    // Process in small batches, pausing between them, to stay under the provider's
+    // per-second rate cap (free node tiers 429 on bursts). BATCH_SIZE calls go out
+    // concurrently, then we sleep BATCH_PAUSE_MS before the next batch so the bucket
+    // refills. The pause is skipped after the final batch.
     for (let i = 0; i < projects.length; i += BATCH_SIZE) {
       const batch = projects.slice(i, i + BATCH_SIZE)
       await Promise.all(batch.map(async ({ app_id }) => {
@@ -129,6 +148,7 @@ export async function syncAllProjects() {
           failed++
         }
       }))
+      if (i + BATCH_SIZE < projects.length) await sleep(BATCH_PAUSE_MS)
     }
 
     const elapsed = ((Date.now() - started) / 1000).toFixed(1)
