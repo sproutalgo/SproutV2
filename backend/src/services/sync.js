@@ -44,6 +44,12 @@ export async function syncSingleProject(appId) {
 // each making a burst of node calls. One-at-a-time execution makes that impossible.
 let _syncRunning = false
 
+// Terminal-app skipping (see syncAllProjects). Every TERMINAL_RECHECK-th cycle we do a
+// FULL sweep that re-reads settled apps too, so a mislabeled one self-heals. At the 5-min
+// cadence, 12 cycles ≈ once per hour.
+const TERMINAL_RECHECK = 12
+let _cycleCount = 0
+
 export async function syncAllProjects() {
   if (_syncRunning) {
     console.warn('[sync] Previous cycle still running — skipping this invocation')
@@ -54,14 +60,50 @@ export async function syncAllProjects() {
   let synced = 0, failed = 0, deleted = 0
 
   try {
-    // Fetch all projects that aren't marked deleted on-chain
-    const { data: projects, error } = await supabase
+    // Fetch all projects that aren't marked deleted on-chain, EXCLUDING ones whose
+    // on-chain state can no longer change ("terminal" apps). Re-reading those every
+    // cycle is pure wasted algod quota — they return the same bytes forever.
+    //
+    // Terminal = funded AND every payout the contract tracks has been claimed
+    // (creator + admin fee + admin). If ANY claim is still outstanding we keep syncing,
+    // so this is conservative: a live app is never skipped. We deliberately do NOT treat
+    // cancelled/refunded as terminal — there's no clean on-chain "all refunds done"
+    // signal, and that set is small — so those keep syncing normally.
+    //
+    // Safety net: terminal apps are not skipped forever. Once per TERMINAL_RECHECK cycles
+    // we include them too, so a wrongly-flagged app self-heals within minutes instead of
+    // being frozen. _cycleCount drives that rotation.
+    const includeTerminal = (_cycleCount % TERMINAL_RECHECK) === 0
+    _cycleCount++
+
+    let query = supabase
       .from('projects')
       .select('app_id')
       .or('on_chain_deleted.is.null,on_chain_deleted.eq.false')
 
+    if (!includeTerminal) {
+      // Exclude fully-settled funded apps. PostgREST: keep rows that are NOT
+      // (funded_round>0 AND creator_claimed AND admin_fee_claimed AND admin_claimed).
+      // Expressed as: funded_round is null/0 OR any claim flag is not-yet-true.
+      query = query.or(
+        'on_chain_funded_round.is.null,' +
+        'on_chain_funded_round.eq.0,' +
+        'on_chain_creator_claimed.is.null,on_chain_creator_claimed.eq.false,' +
+        'on_chain_admin_fee_claimed.is.null,on_chain_admin_fee_claimed.eq.false,' +
+        'on_chain_admin_claimed.is.null,on_chain_admin_claimed.eq.false'
+      )
+    }
+
+    const { data: projects, error } = await query
+
     if (error) throw error
-    if (!projects?.length) return
+    if (!projects?.length) {
+      if (includeTerminal) console.log('[sync] No projects to sync')
+      return
+    }
+    if (includeTerminal) {
+      console.log('[sync] Full sweep (including settled apps) this cycle')
+    }
 
     // Fetch current round ONCE per sync cycle, via the breakered cache. If this comes
     // back 0 the node is unreachable (breaker tripped) — skip the whole cycle rather
