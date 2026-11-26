@@ -12,22 +12,46 @@ import uploadRouter   from './routes/upload.js'
 import { startSyncJob } from './jobs/syncJob.js'
 
 const app  = express()
-app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3001
+
+// ─── Proxy trust ──────────────────────────────────────────────────────────────
+// Render (and most PaaS) terminate TLS at a load balancer and forward the real
+// client IP in X-Forwarded-For. Trust exactly one proxy hop so express-rate-limit
+// keys on the true client IP instead of the proxy's, and stops throwing
+// ERR_ERL_UNEXPECTED_X_FORWARDED_FOR. '1' (not `true`) is deliberate: trusting all
+// proxies would let a client spoof its IP via a forged X-Forwarded-For and dodge
+// the rate limiter.
+app.set('trust proxy', 1)
 
 // ─── Security headers ─────────────────────────────────────────────────────────
 app.use(helmet())
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
+// Exact-match allowlist from env (production domains), plus a pattern allowance for
+// this project's Vercel preview deployments, whose subdomain carries a per-deploy hash
+// (e.g. algorand-crowdfund-<hash>-sproutalgos-projects.vercel.app) and so can never be
+// listed statically. Set ALLOW_VERCEL_PREVIEWS=false to disable the preview pattern.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim())
+  .filter(Boolean)
+
+const allowVercelPreviews = process.env.ALLOW_VERCEL_PREVIEWS !== 'false'
+// Matches https://<anything>-sproutalgos-projects.vercel.app (your Vercel org's
+// preview + production *.vercel.app URLs). Tighten the org slug if it changes.
+const vercelPreviewRe = /^https:\/\/[a-z0-9-]+-sproutalgos-projects\.vercel\.app$/i
+
+function isAllowedOrigin(origin) {
+  if (allowedOrigins.includes(origin)) return true
+  if (allowVercelPreviews && vercelPreviewRe.test(origin)) return true
+  return false
+}
 
 app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (server-to-server, health checks)
     if (!origin) return cb(null, true)
-    if (allowedOrigins.includes(origin)) return cb(null, true)
+    if (isAllowedOrigin(origin)) return cb(null, true)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
